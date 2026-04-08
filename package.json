@@ -3,7 +3,7 @@
   "version": "3.0.0",
   "private": true,
   "type": "module",
-  "description": "Cross-browser ad blocking extension with YouTube-focused hybrid blocking.",
+  "description": "Production-grade Chrome website blocker with MV3 dynamic rules, schedules, and YouTube-hardening.",
   "scripts": {
     "build": "node ./scripts/build.mjs",
     "build:chrome": "node ./scripts/build.mjs chrome",

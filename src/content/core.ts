@@ -1,165 +1,208 @@
 import { ext } from '../shared/browser';
-import { computePageSummary } from '../shared/siteSummary';
-import { getSettings } from '../shared/storage';
-import { matchesAllowlist, normalizeDomain } from '../shared/utils';
+import { PAGE_EVENT_NAME, PAGE_POLICY_EVENT, YOUTUBE_FAMILY_HOSTS } from '../shared/constants';
 
-const BASE_STYLE_ID = 'shieldblock-base-style';
-const PICKER_ID = 'shieldblock-picker-overlay';
+const OVERLAY_ID = 'shieldblock-overlay';
+const STYLE_ID = 'shieldblock-overlay-style';
+const CLOAK_ID = 'shieldblock-cloak-style';
 
-const BASE_SELECTORS = [
-  'ins.adsbygoogle',
-  '[data-ad-client]',
-  '[data-ad-slot]',
-  'iframe[src*="doubleclick.net"]',
-  'iframe[src*="googlesyndication.com"]',
-  'iframe[src*="adnxs.com"]',
-  '[aria-label="Advertisement"]',
-  '[aria-label="Sponsored"]',
-  '[data-promoted="true"]',
-  '[data-ad-preview]',
-];
+let currentUrl = location.href;
+let blockedState = false;
 
-let enabled = true;
-let allowlisted = false;
+function needsPreemptiveCloak(): boolean {
+  return YOUTUBE_FAMILY_HOSTS.some((hostname) => location.hostname === hostname || location.hostname.endsWith(`.${hostname}`));
+}
 
-function ensureBaseStyle(): void {
-  document.getElementById(BASE_STYLE_ID)?.remove();
-  if (!enabled || allowlisted || location.hostname.includes('youtube.com')) return;
-
+function ensureCloak(): void {
+  if (!needsPreemptiveCloak() || document.getElementById(CLOAK_ID)) return;
   const style = document.createElement('style');
-  style.id = BASE_STYLE_ID;
-  style.textContent = `${BASE_SELECTORS.join(',')} { display:none !important; visibility:hidden !important; }`;
+  style.id = CLOAK_ID;
+  style.textContent = 'html { visibility: hidden !important; }';
   document.documentElement.appendChild(style);
 }
 
-function cssPathFor(element: Element): string {
-  const parts: string[] = [];
-  let current: Element | null = element;
+function removeCloak(): void {
+  document.getElementById(CLOAK_ID)?.remove();
+}
 
-  while (current && parts.length < 5) {
-    if (current.id) {
-      parts.unshift(`#${CSS.escape(current.id)}`);
-      break;
+function ensureStyle(): void {
+  if (document.getElementById(STYLE_ID)) return;
+
+  const style = document.createElement('style');
+  style.id = STYLE_ID;
+  style.textContent = `
+    #${OVERLAY_ID} {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: none;
+      background:
+        radial-gradient(circle at top, rgba(236, 101, 68, 0.22), transparent 35%),
+        linear-gradient(180deg, rgba(8, 12, 20, 0.96), rgba(8, 12, 20, 0.98));
+      color: #f6f4ef;
+      font-family: Georgia, "Times New Roman", serif;
+      padding: 28px;
+      align-items: center;
+      justify-content: center;
     }
 
-    const tag = current.tagName.toLowerCase();
-    const classNames = Array.from(current.classList).slice(0, 2).map((name) => `.${CSS.escape(name)}`).join('');
-    const parent = current.parentElement;
-    const siblings = parent ? Array.from(parent.children).filter((child) => child.tagName === current?.tagName) : [];
-    const index = siblings.length > 1 ? `:nth-of-type(${siblings.indexOf(current) + 1})` : '';
-    parts.unshift(`${tag}${classNames}${index}`);
-    current = current.parentElement;
+    #${OVERLAY_ID}[data-visible="true"] {
+      display: flex;
+    }
+
+    #${OVERLAY_ID} .shieldblock-card {
+      width: min(640px, calc(100vw - 32px));
+      border-radius: 28px;
+      border: 1px solid rgba(255, 226, 205, 0.2);
+      background: rgba(24, 30, 42, 0.92);
+      box-shadow: 0 28px 100px rgba(0, 0, 0, 0.4);
+      padding: 32px;
+    }
+
+    #${OVERLAY_ID} .shieldblock-kicker {
+      font: 600 12px/1.2 "Trebuchet MS", sans-serif;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: #f9c7af;
+      margin-bottom: 14px;
+    }
+
+    #${OVERLAY_ID} h1 {
+      margin: 0 0 10px;
+      font-size: clamp(30px, 6vw, 44px);
+      line-height: 0.95;
+    }
+
+    #${OVERLAY_ID} p,
+    #${OVERLAY_ID} li {
+      color: #d2d6de;
+      font: 400 15px/1.6 "Trebuchet MS", sans-serif;
+    }
+
+    #${OVERLAY_ID} ul {
+      margin: 18px 0 0;
+      padding-left: 18px;
+    }
+  `;
+  document.documentElement.appendChild(style);
+}
+
+function pauseMedia(): void {
+  document.querySelectorAll<HTMLMediaElement>('video, audio').forEach((media) => {
+    media.pause();
+    media.muted = true;
+  });
+
+  document.querySelectorAll<HTMLIFrameElement>('iframe').forEach((frame) => {
+    frame.style.visibility = 'hidden';
+  });
+}
+
+function removeYoutubeEmbeds(root: ParentNode = document): void {
+  root.querySelectorAll<HTMLIFrameElement>('iframe').forEach((frame) => {
+    const source = frame.src || frame.getAttribute('src') || '';
+    if (/youtube\.com|youtu\.be|youtube-nocookie\.com/i.test(source)) {
+      frame.remove();
+    }
+  });
+}
+
+function overlay(): HTMLDivElement {
+  const existing = document.getElementById(OVERLAY_ID);
+  if (existing instanceof HTMLDivElement) return existing;
+
+  const root = document.createElement('div');
+  root.id = OVERLAY_ID;
+  root.innerHTML = `
+    <div class="shieldblock-card">
+      <div class="shieldblock-kicker">Focus session</div>
+      <h1>That page is blocked.</h1>
+      <p id="shieldblock-copy">ShieldBlock stopped this navigation before the page could fully render.</p>
+      <ul>
+        <li>Network rules block direct navigations and embedded frames.</li>
+        <li>This overlay closes gaps caused by SPA navigation and already-open tabs.</li>
+        <li>Use the popup or options page to change your block list or schedule.</li>
+      </ul>
+    </div>
+  `;
+  document.documentElement.appendChild(root);
+  return root;
+}
+
+function setBlocked(blocked: boolean, copy?: string): void {
+  ensureStyle();
+  const root = overlay();
+  blockedState = blocked;
+  root.dataset.visible = blocked ? 'true' : 'false';
+  const copyNode = root.querySelector('#shieldblock-copy');
+  if (blocked && copyNode) {
+    copyNode.textContent = copy ?? 'ShieldBlock stopped this navigation before the page could fully render.';
+    pauseMedia();
+    removeYoutubeEmbeds();
   }
 
-  return parts.join(' > ');
+  window.dispatchEvent(new CustomEvent(PAGE_POLICY_EVENT, {
+    detail: { blocked },
+  }));
 }
 
-function removePicker(): void {
-  document.getElementById(PICKER_ID)?.remove();
-}
+async function refresh(): Promise<void> {
+  if (location.protocol.startsWith('chrome-extension')) {
+    return;
+  }
 
-function activatePicker(): void {
-  removePicker();
+  try {
+    const result = await ext.runtime.sendMessage({ type: 'CHECK_URL', url: location.href }) as {
+      blocked: boolean;
+      allowlisted: boolean;
+      match: { matched: boolean; displayValue?: string };
+    };
 
-  const overlay = document.createElement('div');
-  overlay.id = PICKER_ID;
-  overlay.style.cssText = `
-    position:fixed; inset:0; z-index:2147483647; cursor:crosshair;
-    background:rgba(12, 18, 18, 0.1); border:2px dashed rgba(68, 255, 189, 0.55);
-  `;
-
-  let highlighted: HTMLElement | null = null;
-  let previousOutline = '';
-
-  const cleanupHighlight = () => {
-    if (highlighted) {
-      highlighted.style.outline = previousOutline;
-    }
-    highlighted = null;
-  };
-
-  const onMove = (event: MouseEvent) => {
-    const target = document.elementFromPoint(event.clientX, event.clientY);
-    if (!(target instanceof HTMLElement) || target === overlay) return;
-    cleanupHighlight();
-    highlighted = target;
-    previousOutline = target.style.outline;
-    target.style.outline = '2px solid #44ffbd';
-  };
-
-  const stop = () => {
-    cleanupHighlight();
-    overlay.remove();
-    document.removeEventListener('mousemove', onMove, true);
-    document.removeEventListener('keydown', onKeyDown, true);
-  };
-
-  const onClick = (event: MouseEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const target = document.elementFromPoint(event.clientX, event.clientY);
-    if (!(target instanceof Element)) {
-      stop();
+    if (result.blocked) {
+      removeCloak();
+      setBlocked(true, result.match.displayValue
+        ? `Blocked by rule "${result.match.displayValue}".`
+        : 'ShieldBlock stopped this navigation before the page could fully render.');
       return;
     }
 
-    const rule = cssPathFor(target);
-    ext.runtime.sendMessage({
-      type: 'SAVE_CUSTOM_RULE',
-      domain: normalizeDomain(location.hostname),
-      rule,
-    });
-    stop();
-  };
-
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') stop();
-  };
-
-  overlay.addEventListener('click', onClick, true);
-  document.addEventListener('mousemove', onMove, true);
-  document.addEventListener('keydown', onKeyDown, true);
-  document.documentElement.appendChild(overlay);
+    removeCloak();
+    setBlocked(false);
+  } catch {
+    removeCloak();
+    setBlocked(false);
+  }
 }
 
-async function refreshState(): Promise<void> {
-  const settings = await getSettings(['enabled', 'allowlist']);
-  enabled = settings.enabled !== false;
-  allowlisted = matchesAllowlist(location.hostname, settings.allowlist ?? []);
-  ensureBaseStyle();
+function observeUrlChanges(): void {
+  const maybeRefresh = () => {
+    if (location.href === currentUrl) return;
+    currentUrl = location.href;
+    void refresh();
+  };
+
+  window.addEventListener(PAGE_EVENT_NAME, maybeRefresh as EventListener);
+  window.addEventListener('hashchange', maybeRefresh, true);
+  window.addEventListener('popstate', maybeRefresh, true);
+  setInterval(maybeRefresh, 500);
 }
 
-const observer = new MutationObserver(() => {
-  document.querySelectorAll<HTMLElement>('iframe[src*="doubleclick"], iframe[src*="googlesyndication"]').forEach((frame) => {
-    frame.dataset.shieldblockHidden = '1';
-    frame.style.display = 'none';
+function protectOverlay(): void {
+  const observer = new MutationObserver(() => {
+    if (blockedState && !document.getElementById(OVERLAY_ID)) {
+      setBlocked(true, 'ShieldBlock restored its blocking overlay after page tampering.');
+    }
+    removeYoutubeEmbeds();
   });
-});
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+}
 
-observer.observe(document.documentElement, { childList: true, subtree: true });
-
-ext.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: (response: unknown) => void) => {
-  if (message.type === 'GET_PAGE_SUMMARY') {
-    sendResponse(computePageSummary(document, location.hostname, enabled, allowlisted));
-    return true;
-  }
-
-  if (message.type === 'ACTIVATE_PICKER') {
-    activatePicker();
-  }
-
-  if (['TOGGLE_EXTENSION', 'ALLOWLIST_UPDATED'].includes(message.type)) {
-    void refreshState();
-  }
-
-  return false;
-});
-
-ext.storage.onChanged.addListener((changes: Record<string, unknown>, areaName: string) => {
-  if (areaName === 'local' && (changes.enabled || changes.allowlist)) {
-    void refreshState();
+ext.runtime.onMessage.addListener((message: { type?: string }) => {
+  if (message.type === 'STATE_UPDATED') {
+    void refresh();
   }
 });
 
-void refreshState();
+ensureCloak();
+observeUrlChanges();
+protectOverlay();
+void refresh();

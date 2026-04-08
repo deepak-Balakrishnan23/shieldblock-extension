@@ -1,299 +1,302 @@
-import { ext } from '../shared/browser';
-import {
-  ActivityEvent,
-  DEFAULT_SETTINGS,
-  RemoteRuleManifest,
-  RULESET_COUNTS,
-  RULESET_IDS,
-  RulesetId,
-} from '../shared/constants';
-import { getSettings, setSettings } from '../shared/storage';
-import { normalizeDomain, sha256Hex } from '../shared/utils';
+import { ext, runtimeUrl } from '../shared/browser';
+import { AppState, PopupSnapshot } from '../shared/constants';
+import { buildDynamicRules } from '../shared/dnr';
+import { createEntry, evaluateUrl } from '../shared/matcher';
+import { getState, setState } from '../shared/storage';
+import { isExpired, normalizeHostname, safeUrl, todayKey } from '../shared/utils';
 
-const UPDATE_ALARM = 'shieldblock-rule-refresh';
-const FALLBACK_UPDATE_PATH = 'updates/fallback-update.json';
+const redirectingTabs = new Set<number>();
+const SCHEDULE_ALARM = 'shieldblock-schedule-sync';
+const CLEANUP_ALARM = 'shieldblock-cleanup';
 
-function getEnabledRuleCount(data: Record<string, unknown>): number {
-  if (data.enabled === false) return 0;
-  return RULESET_IDS.reduce((sum, rulesetId) => {
-    return data[`${rulesetId}Enabled`] === false ? sum : sum + RULESET_COUNTS[rulesetId];
-  }, 0);
+function pruneTemporaryUnlocks(state: AppState): AppState {
+  const nextUnlocks = Object.fromEntries(
+    Object.entries(state.temporaryUnlocks).filter(([, expiresAt]) => !isExpired(expiresAt))
+  );
+  return Object.keys(nextUnlocks).length === Object.keys(state.temporaryUnlocks).length
+    ? state
+    : { ...state, temporaryUnlocks: nextUnlocks };
 }
 
-async function recordActivity(partial: Omit<ActivityEvent, 'timestamp'>): Promise<void> {
-  const settings = await getSettings(['lastActivities']);
-  const lastActivities = settings.lastActivities ?? [];
-  lastActivities.unshift({ ...partial, timestamp: Date.now() });
-  await setSettings({ lastActivities: lastActivities.slice(0, 20) });
-}
+async function syncDynamicRules(state: AppState): Promise<void> {
+  if (!ext.declarativeNetRequest?.updateDynamicRules) return;
 
-function safeSendMessage(tabId: number, message: unknown): Promise<unknown | undefined> {
-  return new Promise((resolve) => {
-    ext.tabs.sendMessage(tabId, message, (response: unknown) => {
-      const lastError = ext.runtime.lastError;
-      if (lastError) {
-        resolve(undefined);
-        return;
-      }
-      resolve(response);
-    });
-  });
-}
-
-async function broadcast(message: unknown): Promise<void> {
-  const tabs = await ext.tabs.query({});
-  await Promise.all(tabs.filter((tab: any) => typeof tab.id === 'number').map((tab: any) => safeSendMessage(tab.id!, message)));
-}
-
-async function syncRulesets(state: Record<string, unknown>): Promise<void> {
-  if (!ext.declarativeNetRequest?.updateEnabledRulesets) return;
-
-  const enableRulesetIds = state.enabled === false
-    ? []
-    : RULESET_IDS.filter((rulesetId) => state[`${rulesetId}Enabled`] !== false);
-  const disableRulesetIds = RULESET_IDS.filter((id) => !enableRulesetIds.includes(id));
-
-  await ext.declarativeNetRequest.updateEnabledRulesets({
-    enableRulesetIds,
-    disableRulesetIds,
-  });
-}
-
-async function readFallbackUpdateManifest(): Promise<RemoteRuleManifest | null> {
-  try {
-    const response = await fetch(ext.runtime.getURL(FALLBACK_UPDATE_PATH));
-    if (!response.ok) return null;
-    return await response.json() as RemoteRuleManifest;
-  } catch {
-    return null;
-  }
-}
-
-async function validateUpdateManifest(manifest: RemoteRuleManifest): Promise<boolean> {
-  const payload = JSON.stringify(manifest.payload);
-  const digest = await sha256Hex(payload);
-  return digest === manifest.integrity.sha256;
-}
-
-async function applyDynamicRules(manifest: RemoteRuleManifest): Promise<boolean> {
-  if (!ext.declarativeNetRequest?.updateDynamicRules) return false;
   const existing = await ext.declarativeNetRequest.getDynamicRules();
+  const removeRuleIds = existing.map((rule: chrome.declarativeNetRequest.Rule) => rule.id);
+  const addRules = buildDynamicRules(state);
+
   await ext.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: existing.map((rule: any) => rule.id),
-    addRules: manifest.payload.dynamicRules,
+    removeRuleIds,
+    addRules,
   });
-  await setSettings({
-    lastAppliedUpdate: manifest.version,
-    lastUpdateCheck: Date.now(),
-  });
-  return true;
 }
 
-async function refreshRemoteUpdates(): Promise<void> {
-  const settings = await getSettings(['remoteUpdateUrl', 'debugMode']);
-  let manifest: RemoteRuleManifest | null = null;
+async function initializeState(): Promise<AppState> {
+  const state = pruneTemporaryUnlocks(await getState());
+  const next = {
+    ...state,
+    blockEntries: [...state.blockEntries].sort((left, right) => left.createdAt - right.createdAt),
+  };
+  await setState(next);
+  await syncDynamicRules(next);
+  return next;
+}
 
-  if (settings.remoteUpdateUrl) {
-    try {
-      const response = await fetch(settings.remoteUpdateUrl, { cache: 'no-store' });
-      if (response.ok) {
-        manifest = await response.json() as RemoteRuleManifest;
-      }
-    } catch {
-      manifest = null;
-    }
-  }
+async function resetDailyStatsIfNeeded(state: AppState): Promise<AppState> {
+  const cleaned = pruneTemporaryUnlocks(state);
+  const key = todayKey();
+  if (cleaned.stats.lastResetDay === key) return cleaned;
 
-  if (!manifest) {
-    manifest = await readFallbackUpdateManifest();
-  }
-  if (!manifest) return;
+  const next: AppState = {
+    ...cleaned,
+    stats: {
+      ...cleaned.stats,
+      blockedToday: 0,
+      lastResetDay: key,
+    },
+  };
+  await setState({ stats: next.stats, temporaryUnlocks: next.temporaryUnlocks });
+  return next;
+}
 
-  if (!(await validateUpdateManifest(manifest))) {
-    await recordActivity({
-      kind: 'security',
-      title: 'Rule update rejected',
-      detail: 'Integrity check failed',
-    });
+async function incrementBlockedCount(): Promise<void> {
+  const state = await resetDailyStatsIfNeeded(await getState());
+  await setState({
+    stats: {
+      ...state.stats,
+      totalBlocked: state.stats.totalBlocked + 1,
+      blockedToday: state.stats.blockedToday + 1,
+      lastBlockedAt: Date.now(),
+    },
+  });
+}
+
+async function enforceTab(tabId: number, url?: string): Promise<void> {
+  if (!url || redirectingTabs.has(tabId) || url.startsWith(runtimeUrl(''))) {
     return;
   }
 
-  const applied = await applyDynamicRules(manifest);
-  if (applied) {
-    await recordActivity({
-      kind: 'info',
-      title: 'Rule update applied',
-      detail: `Version ${manifest.version}`,
+  const state = await resetDailyStatsIfNeeded(await getState());
+  const evaluation = evaluateUrl(state, url);
+  if (!evaluation.blocked || !state.strictMode) return;
+
+  redirectingTabs.add(tabId);
+  await incrementBlockedCount();
+  const parsed = safeUrl(url);
+  const reason = evaluation.match.displayValue ?? evaluation.match.reason ?? 'active-rule';
+  await ext.tabs.update(tabId, {
+    url: `${runtimeUrl('blocked.html')}?fromTab=1&url=${encodeURIComponent(url)}&host=${encodeURIComponent(parsed?.hostname ?? '')}&reason=${encodeURIComponent(reason)}`,
+  });
+  setTimeout(() => {
+    redirectingTabs.delete(tabId);
+  }, 1000);
+}
+
+async function getActiveTabSnapshot(): Promise<PopupSnapshot['activeTab']> {
+  const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
+  const url = typeof tab?.url === 'string' ? tab.url : '';
+  const state = await resetDailyStatsIfNeeded(await getState());
+  const parsed = safeUrl(url);
+  const evaluation = url ? evaluateUrl(state, url) : { blocked: false, allowlisted: false, match: { matched: false } };
+
+  return {
+    id: tab?.id,
+    url,
+    hostname: parsed?.hostname ?? '',
+    blocked: evaluation.blocked,
+    match: evaluation.match,
+    allowlisted: evaluation.allowlisted,
+  };
+}
+
+async function getPopupSnapshot(): Promise<PopupSnapshot> {
+  const state = await resetDailyStatsIfNeeded(await getState());
+  return {
+    state,
+    activeTab: await getActiveTabSnapshot(),
+  };
+}
+
+async function broadcastState(): Promise<void> {
+  const tabs = await ext.tabs.query({}) as chrome.tabs.Tab[];
+  await Promise.all(
+    tabs
+      .filter((tab: chrome.tabs.Tab) => typeof tab.id === 'number')
+      .map((tab: chrome.tabs.Tab) => ext.tabs.sendMessage(tab.id!, { type: 'STATE_UPDATED' }).catch(() => undefined))
+  );
+}
+
+async function saveAndSync(nextState: Partial<AppState>): Promise<void> {
+  await setState(nextState);
+  const state = pruneTemporaryUnlocks(await getState());
+  await syncDynamicRules(state);
+  await setState({ temporaryUnlocks: state.temporaryUnlocks });
+  await broadcastState();
+}
+
+ext.runtime.onInstalled.addListener(() => {
+  void initializeState();
+  ext.alarms?.create(SCHEDULE_ALARM, { periodInMinutes: 1 });
+  ext.alarms?.create(CLEANUP_ALARM, { periodInMinutes: 5 });
+});
+
+ext.runtime.onStartup?.addListener(() => {
+  void initializeState();
+  ext.alarms?.create(SCHEDULE_ALARM, { periodInMinutes: 1 });
+  ext.alarms?.create(CLEANUP_ALARM, { periodInMinutes: 5 });
+});
+
+ext.alarms?.onAlarm.addListener((alarm: chrome.alarms.Alarm) => {
+  if (alarm.name === SCHEDULE_ALARM || alarm.name === CLEANUP_ALARM) {
+    void getState().then(pruneTemporaryUnlocks).then(async (state) => {
+      await setState({ temporaryUnlocks: state.temporaryUnlocks });
+      await syncDynamicRules(state);
     });
-  }
-}
-
-async function activeTabSummary(): Promise<{ success: boolean; tab?: any; summary?: unknown }> {
-  const tabs = await ext.tabs.query({ active: true, currentWindow: true });
-  const tab = tabs[0];
-  if (!tab?.id) return { success: false };
-  const summary = await safeSendMessage(tab.id, { type: 'GET_PAGE_SUMMARY' });
-  return { success: true, tab, summary };
-}
-
-ext.runtime.onInstalled.addListener(async () => {
-  const current = await ext.storage.local.get(null);
-  await ext.storage.local.set({ ...DEFAULT_SETTINGS, ...current, installDate: current.installDate ?? Date.now() });
-  await syncRulesets({ ...DEFAULT_SETTINGS, ...current });
-  if (ext.alarms) {
-    ext.alarms.create(UPDATE_ALARM, { delayInMinutes: 1, periodInMinutes: 360 });
   }
 });
 
-if (ext.alarms) {
-  ext.alarms.onAlarm.addListener((alarm: any) => {
-    if (alarm.name === UPDATE_ALARM) {
-      void refreshRemoteUpdates();
-    }
-  });
-}
+ext.tabs.onUpdated.addListener((tabId: number, changeInfo: chrome.tabs.TabChangeInfo, tab: chrome.tabs.Tab) => {
+  const url = changeInfo.url ?? tab.url;
+  if (!url) return;
+  void enforceTab(tabId, url);
+});
 
-ext.runtime.onMessage.addListener((message: any, _sender: any, sendResponse: (response: unknown) => void) => {
+ext.runtime.onMessage.addListener((
+  message: { type: string; [key: string]: unknown },
+  _sender: chrome.runtime.MessageSender,
+  sendResponse: (response?: unknown) => void
+) => {
   void (async () => {
+    const state = await resetDailyStatsIfNeeded(await getState());
+
     switch (message.type) {
-      case 'GET_STATS': {
-        const state = await getSettings();
-        sendResponse({
-          ...state,
-          enabledRuleCount: getEnabledRuleCount(state as Record<string, unknown>),
-        });
+      case 'GET_POPUP_SNAPSHOT':
+        sendResponse(await getPopupSnapshot());
         return;
-      }
-      case 'GET_ACTIVE_TAB_INFO': {
-        sendResponse(await activeTabSummary());
+
+      case 'GET_STATE':
+        sendResponse(state);
         return;
-      }
-      case 'INCREMENT_BLOCKED': {
-        const category = `${message.category ?? 'ads'}Blocked`;
-        const state = await getSettings(['totalBlocked', 'sessionBlocked', 'adsBlocked', 'trackersBlocked', 'smartBlocked']);
-        await setSettings({
-          totalBlocked: (state.totalBlocked ?? 0) + (message.count ?? 1),
-          sessionBlocked: (state.sessionBlocked ?? 0) + (message.count ?? 1),
-          [category]: ((state as Record<string, number>)[category] ?? 0) + (message.count ?? 1),
-        });
-        sendResponse({ success: true });
-        return;
-      }
-      case 'ACTIVITY_EVENT': {
-        await recordActivity({
-          kind: message.kind ?? 'info',
-          title: message.title ?? 'ShieldBlock event',
-          detail: message.detail ?? '',
-        });
-        sendResponse({ success: true });
-        return;
-      }
-      case 'TOGGLE_EXTENSION': {
-        const state = await getSettings();
-        const next = { ...state, enabled: message.enabled !== false };
-        await setSettings({ enabled: next.enabled });
-        await syncRulesets(next as Record<string, unknown>);
-        await broadcast({ type: 'TOGGLE_EXTENSION', enabled: next.enabled });
-        sendResponse({ success: true });
-        return;
-      }
-      case 'TOGGLE_CATEGORY': {
-        const category = message.category as RulesetId;
-        await setSettings({ [`${category}Enabled`]: message.enabled !== false } as Record<string, unknown>);
-        const state = await getSettings();
-        await syncRulesets(state as Record<string, unknown>);
-        if (category === 'youtube') {
-          await broadcast({ type: 'TOGGLE_YOUTUBE', enabled: message.enabled !== false });
-        }
-        sendResponse({ success: true });
-        return;
-      }
-      case 'TOGGLE_ANNOYANCES': {
-        await setSettings({ annoyancesEnabled: message.enabled !== false });
-        await broadcast({ type: 'TOGGLE_ANNOYANCES', enabled: message.enabled !== false });
-        sendResponse({ success: true });
-        return;
-      }
-      case 'RESET_STATS': {
-        await setSettings({
-          totalBlocked: 0,
-          adsBlocked: 0,
-          trackersBlocked: 0,
-          smartBlocked: 0,
-          phishingDetected: 0,
-          sessionBlocked: 0,
-        });
-        sendResponse({ success: true });
-        return;
-      }
-      case 'ADD_TO_ALLOWLIST': {
-        const domain = normalizeDomain(message.domain ?? '');
-        const state = await getSettings(['allowlist']);
-        const allowlist = new Set(state.allowlist ?? []);
-        if (domain) allowlist.add(domain);
-        await setSettings({ allowlist: [...allowlist] });
-        await broadcast({ type: 'ALLOWLIST_UPDATED' });
-        sendResponse({ success: true });
-        return;
-      }
-      case 'REMOVE_FROM_ALLOWLIST': {
-        const domain = normalizeDomain(message.domain ?? '');
-        const state = await getSettings(['allowlist']);
-        await setSettings({ allowlist: (state.allowlist ?? []).filter((item) => item !== domain) });
-        await broadcast({ type: 'ALLOWLIST_UPDATED' });
-        sendResponse({ success: true });
-        return;
-      }
-      case 'SAVE_CUSTOM_RULE': {
-        const domain = normalizeDomain(message.domain ?? '');
-        const rule = String(message.rule ?? '').trim();
-        if (!domain || !rule) {
-          sendResponse({ success: false });
+
+      case 'UPSERT_BLOCK_ENTRY': {
+        const entry = createEntry(String(message.input ?? ''));
+        if (!entry) {
+          sendResponse({ ok: false, error: 'Enter a valid hostname, URL, keyword, or /regex/.' });
           return;
         }
-        const state = await getSettings(['customRulesByDomain']);
-        const next = { ...(state.customRulesByDomain ?? {}) };
-        const rules = new Set(next[domain] ?? []);
-        rules.add(rule);
-        next[domain] = [...rules];
-        await setSettings({ customRulesByDomain: next });
-        await recordActivity({
-          kind: 'learning',
-          title: 'Learned site rule',
-          detail: `${domain} -> ${rule}`,
+
+        const exists = state.blockEntries.some(
+          (item) => item.type === entry.type && item.value.toLowerCase() === entry.value.toLowerCase()
+        );
+        if (exists) {
+          sendResponse({ ok: false, error: 'That rule already exists.' });
+          return;
+        }
+
+        await saveAndSync({ blockEntries: [...state.blockEntries, entry] });
+        sendResponse({ ok: true });
+        return;
+      }
+
+      case 'DELETE_BLOCK_ENTRY':
+        await saveAndSync({ blockEntries: state.blockEntries.filter((entry) => entry.id !== message.id) });
+        sendResponse({ ok: true });
+        return;
+
+      case 'TOGGLE_ENABLED':
+        await saveAndSync({ enabled: message.enabled !== false });
+        sendResponse({ ok: true });
+        return;
+
+      case 'SET_STRICT_MODE':
+        await saveAndSync({ strictMode: message.strictMode !== false });
+        sendResponse({ ok: true });
+        return;
+
+      case 'SAVE_SCHEDULE': {
+        const days = Array.isArray(message.days) ? message.days.filter((value): value is number => Number.isInteger(value)) : [];
+        const startMinutes = Number(message.startMinutes);
+        const endMinutes = Number(message.endMinutes);
+        if (startMinutes < 0 || startMinutes > 1439 || endMinutes < 0 || endMinutes > 1439) {
+          sendResponse({ ok: false, error: 'Schedule times must be valid 24-hour clock values.' });
+          return;
+        }
+
+        await saveAndSync({
+          focusSchedule: {
+            enabled: message.enabled === true,
+            days,
+            startMinutes,
+            endMinutes,
+          },
         });
-        await broadcast({ type: 'CUSTOM_RULES_UPDATED' });
-        sendResponse({ success: true, customRulesByDomain: next });
+        sendResponse({ ok: true });
         return;
       }
-      case 'CLEAR_CUSTOM_RULES': {
-        await setSettings({ customRulesByDomain: {} });
-        sendResponse({ success: true });
+
+      case 'TOGGLE_ALLOWLIST_FOR_ACTIVE_TAB': {
+        const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
+        const parsed = typeof tab?.url === 'string' ? safeUrl(tab.url) : null;
+        if (!parsed) {
+          sendResponse({ ok: false, allowlisted: false });
+          return;
+        }
+
+        const hostname = normalizeHostname(parsed.hostname);
+        const allowlist = new Set(state.allowlist);
+        let allowlisted = false;
+        if (allowlist.has(hostname)) {
+          allowlist.delete(hostname);
+        } else {
+          allowlist.add(hostname);
+          allowlisted = true;
+        }
+
+        await saveAndSync({ allowlist: [...allowlist].sort() });
+        sendResponse({ ok: true, allowlisted });
         return;
       }
-      case 'ACTIVATE_PICKER': {
-        const tabs = await ext.tabs.query({ active: true, currentWindow: true });
-        const tab = tabs[0];
-        if (tab?.id) await safeSendMessage(tab.id, { type: 'ACTIVATE_PICKER' });
-        sendResponse({ success: true });
+
+      case 'TEMPORARY_UNLOCK_HOST': {
+        const hostname = normalizeHostname(String(message.hostname ?? ''));
+        const minutes = Math.max(1, Math.min(60, Number(message.minutes) || 5));
+        if (!hostname) {
+          sendResponse({ ok: false });
+          return;
+        }
+
+        const expiresAt = Date.now() + (minutes * 60 * 1000);
+        await saveAndSync({
+          temporaryUnlocks: {
+            ...state.temporaryUnlocks,
+            [hostname]: expiresAt,
+          },
+        });
+        sendResponse({ ok: true, expiresAt });
         return;
       }
-      case 'RUN_RULE_UPDATE': {
-        await refreshRemoteUpdates();
-        sendResponse({ success: true });
+
+      case 'CHECK_URL': {
+        const evaluation = evaluateUrl(state, String(message.url ?? ''));
+        sendResponse({
+          ...evaluation,
+          blocked: state.strictMode && evaluation.blocked,
+        });
         return;
       }
-      default: {
-        sendResponse({ success: false, error: 'Unsupported message' });
+
+      case 'GET_BLOCK_REASON': {
+        const url = _sender.tab?.url ?? '';
+        sendResponse(evaluateUrl(state, url));
+        return;
       }
+
+      default:
+        sendResponse({ ok: false });
     }
-  })().catch(async (error: unknown) => {
-    await recordActivity({
-      kind: 'security',
-      title: 'Background error',
-      detail: error instanceof Error ? error.message : 'Unknown error',
-    });
-    sendResponse({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+  })().catch((error) => {
+    console.error('ShieldBlock worker error', error);
+    sendResponse({ ok: false, error: 'Unexpected extension error.' });
   });
 
   return true;

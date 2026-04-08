@@ -10,7 +10,7 @@
     "allowJs": false,
     "resolveJsonModule": true,
     "esModuleInterop": true,
-    "types": ["node"]
+    "types": ["node", "chrome"]
   },
   "include": ["src/**/*.ts", "tests/**/*.ts", "scripts/**/*.mjs"]
 }

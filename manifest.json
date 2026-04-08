@@ -96,7 +96,8 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "model/ad_classifier.json"
+        "model/ad_classifier.json",
+        "youtube-hook.js"
       ],
       "matches": [
         "*://*/*"

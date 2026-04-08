@@ -3,42 +3,39 @@
 import esbuild from 'esbuild';
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const distRoot = path.join(root, 'dist');
 const sourceRoot = path.join(root, 'src');
-const targets = process.argv[2] ? [process.argv[2]] : ['chrome', 'firefox'];
+const distRoot = path.join(root, 'dist', 'chrome');
 
-const entries = {
+const entryPoints = {
   background: path.join(sourceRoot, 'background/index.ts'),
-  popup: path.join(sourceRoot, 'popup/index.ts'),
   content: path.join(sourceRoot, 'content/core.ts'),
-  annoyances: path.join(sourceRoot, 'content/annoyances.ts'),
-  youtube: path.join(sourceRoot, 'content/youtube.ts'),
-  youtubeHook: path.join(sourceRoot, 'page/youtube-hook.ts'),
+  'page-bridge': path.join(sourceRoot, 'content/page-bridge.ts'),
+  popup: path.join(sourceRoot, 'popup/index.ts'),
+  options: path.join(sourceRoot, 'options/index.ts'),
 };
 
-function ensureDir(dir) {
-  fs.mkdirSync(dir, { recursive: true });
+function ensureDir(dirPath) {
+  fs.mkdirSync(dirPath, { recursive: true });
 }
 
-function cleanDir(dir) {
-  fs.rmSync(dir, { recursive: true, force: true });
-  ensureDir(dir);
+function writeJson(filePath, data) {
+  ensureDir(path.dirname(filePath));
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
-function copyFile(from, to) {
-  ensureDir(path.dirname(to));
-  fs.copyFileSync(from, to);
+function copyFile(source, target) {
+  ensureDir(path.dirname(target));
+  fs.copyFileSync(source, target);
 }
 
-function copyDir(from, to) {
-  ensureDir(to);
-  for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
-    const sourcePath = path.join(from, entry.name);
-    const targetPath = path.join(to, entry.name);
+function copyDir(source, target) {
+  ensureDir(target);
+  for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
+    const sourcePath = path.join(source, entry.name);
+    const targetPath = path.join(target, entry.name);
     if (entry.isDirectory()) {
       copyDir(sourcePath, targetPath);
     } else {
@@ -47,23 +44,17 @@ function copyDir(from, to) {
   }
 }
 
-function writeJson(filePath, data) {
-  ensureDir(path.dirname(filePath));
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-}
-
-function makeChromeManifest() {
+function manifest() {
   return {
     manifest_version: 3,
-    name: 'ShieldBlock AI - Ad Blocker',
-    version: '3.0.0',
-    description: 'Hybrid ad blocker for Chrome and Firefox with YouTube-specific ad stripping and local privacy protections.',
+    name: 'ShieldBlock',
+    version: '4.0.0',
+    description: 'Production-style website and app blocker with dynamic MV3 navigation rules, YouTube hardening, schedules, and a fail-safe overlay.',
     permissions: [
-      'declarativeNetRequestWithHostAccess',
+      'alarms',
       'storage',
       'tabs',
-      'activeTab',
-      'alarms',
+      'declarativeNetRequest',
     ],
     host_permissions: ['<all_urls>'],
     background: {
@@ -78,152 +69,62 @@ function makeChromeManifest() {
         128: 'icons/icon128.png',
       },
     },
+    options_page: 'options.html',
     icons: {
       16: 'icons/icon16.png',
       48: 'icons/icon48.png',
       128: 'icons/icon128.png',
     },
-    declarative_net_request: {
-      rule_resources: [
-        { id: 'ads', enabled: true, path: 'rules/ads.json' },
-        { id: 'trackers', enabled: true, path: 'rules/trackers.json' },
-        { id: 'patterns', enabled: true, path: 'rules/patterns.json' },
-        { id: 'popups', enabled: true, path: 'rules/popups.json' },
-        { id: 'youtube', enabled: true, path: 'rules/youtube.json' },
-        { id: 'malware', enabled: true, path: 'rules/malware.json' },
-      ],
-    },
     content_scripts: [
       {
         matches: ['<all_urls>'],
-        js: ['content.js', 'annoyances.js'],
+        js: ['page-bridge.js'],
         run_at: 'document_start',
+        world: 'MAIN',
+        all_frames: true,
       },
       {
-        matches: ['*://*.youtube.com/*'],
-        js: ['youtube.js'],
-        run_at: 'document_start',
-      },
-    ],
-    web_accessible_resources: [
-      {
-        resources: ['page/youtube-hook.js', 'model/ad_classifier.json'],
         matches: ['<all_urls>'],
+        js: ['content.js'],
+        run_at: 'document_start',
+        all_frames: true,
       },
     ],
   };
 }
 
-function makeFirefoxManifest() {
-  return {
-    ...makeChromeManifest(),
-    browser_specific_settings: {
-      gecko: {
-        id: 'shieldblock@baladhak.local',
-        strict_min_version: '128.0',
-        data_collection_permissions: {
-          required: ['none'],
-        },
-      },
-    },
-  };
+function cleanDist() {
+  fs.rmSync(distRoot, { recursive: true, force: true });
+  ensureDir(distRoot);
 }
 
-function buildFallbackUpdate() {
-  const payload = {
-    dynamicRules: [
-      {
-        id: 100001,
-        priority: 1,
-        action: { type: 'block' },
-        condition: {
-          urlFilter: '||youtube.com/youtubei/v1/player/ad_break',
-          resourceTypes: ['xmlhttprequest'],
-        },
-      },
-      {
-        id: 100002,
-        priority: 1,
-        action: { type: 'block' },
-        condition: {
-          urlFilter: '||youtube.com/api/stats/ads',
-          resourceTypes: ['xmlhttprequest', 'image'],
-        },
-      },
-    ],
-    siteFixes: {
-      youtubeExtraSelectors: ['ytd-search-pyv-renderer', 'ytd-banner-promo-renderer'],
-      sponsoredKeywords: ['sponsored', 'promoted', 'install', 'visit site'],
-    },
-  };
-  const sha256 = crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
-  return {
-    version: '2026.03.30',
-    generatedAt: new Date().toISOString(),
-    payload,
-    integrity: {
-      algorithm: 'SHA-256',
-      sha256,
-    },
-  };
-}
-
-async function buildTarget(target) {
-  const outDir = path.join(distRoot, target);
-  cleanDir(outDir);
+async function build() {
+  cleanDist();
 
   await esbuild.build({
-    entryPoints: {
-      background: entries.background,
-      popup: entries.popup,
-      content: entries.content,
-      annoyances: entries.annoyances,
-      youtube: entries.youtube,
-      'page/youtube-hook': entries.youtubeHook,
-    },
-    outdir: outDir,
+    entryPoints,
+    outdir: distRoot,
     bundle: true,
     format: 'esm',
+    platform: 'browser',
     target: 'es2022',
     sourcemap: false,
     minify: false,
-    platform: 'browser',
   });
 
-  copyDir(path.join(root, 'icons'), path.join(outDir, 'icons'));
-  copyDir(path.join(root, 'rules'), path.join(outDir, 'rules'));
-  copyDir(path.join(root, 'model'), path.join(outDir, 'model'));
-
-  for (const doc of [
-    'README.md',
-    'ARCHITECTURE.md',
-    'TESTING.md',
-    'TEST_REPORT.md',
-    'LEGAL_AND_POLICY.md',
-    'PRIVACY_POLICY.md',
-    'CHROME_WEB_STORE_DESCRIPTION.md',
-    'REVIEWER_NOTES.md',
-    'PRE_SUBMISSION_CHECKLIST.md',
-  ]) {
-    if (fs.existsSync(path.join(root, doc))) {
-      copyFile(path.join(root, doc), path.join(outDir, doc));
-    }
-  }
-
-  ensureDir(path.join(outDir, 'updates'));
-  writeJson(path.join(outDir, 'updates/fallback-update.json'), buildFallbackUpdate());
-  copyFile(path.join(root, 'static/popup.html'), path.join(outDir, 'popup.html'));
-
-  writeJson(
-    path.join(outDir, 'manifest.json'),
-    target === 'firefox' ? makeFirefoxManifest() : makeChromeManifest()
-  );
+  copyDir(path.join(root, 'icons'), path.join(distRoot, 'icons'));
+  copyFile(path.join(root, 'static/popup.html'), path.join(distRoot, 'popup.html'));
+  copyFile(path.join(root, 'static/options.html'), path.join(distRoot, 'options.html'));
+  copyFile(path.join(root, 'static/blocked.html'), path.join(distRoot, 'blocked.html'));
+  copyFile(path.join(root, 'static/styles.css'), path.join(distRoot, 'styles.css'));
+  copyFile(path.join(root, 'README.md'), path.join(distRoot, 'README.md'));
+  copyFile(path.join(root, 'ARCHITECTURE.md'), path.join(distRoot, 'ARCHITECTURE.md'));
+  copyFile(path.join(root, 'TESTING.md'), path.join(distRoot, 'TESTING.md'));
+  writeJson(path.join(distRoot, 'manifest.json'), manifest());
 }
 
-Promise.all(targets.map(buildTarget))
-  .then(() => {
-    console.log(`Built targets: ${targets.join(', ')}`);
-  })
+build()
+  .then(() => console.log('Built dist/chrome'))
   .catch((error) => {
     console.error(error);
     process.exit(1);

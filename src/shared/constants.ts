@@ -1,91 +1,117 @@
-export const RULESET_IDS = ['ads', 'trackers', 'patterns', 'popups', 'youtube', 'malware'] as const;
+export const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
-export type RulesetId = typeof RULESET_IDS[number];
+export const YOUTUBE_FAMILY_HOSTS = [
+  'youtube.com',
+  'youtu.be',
+  'youtube-nocookie.com',
+] as const;
 
-export const RULESET_COUNTS: Record<RulesetId, number> = {
-  ads: 12000,
-  trackers: 9000,
-  patterns: 8000,
-  popups: 1226,
-  youtube: 10,
-  malware: 48,
-};
+export type BlockEntryType = 'hostname' | 'keyword' | 'regex';
 
-export const DEFAULT_SETTINGS = {
+export interface BlockEntry {
+  id: string;
+  label: string;
+  value: string;
+  type: BlockEntryType;
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface FocusSchedule {
+  enabled: boolean;
+  days: number[];
+  startMinutes: number;
+  endMinutes: number;
+}
+
+export interface BlockStats {
+  totalBlocked: number;
+  blockedToday: number;
+  lastBlockedAt: number;
+  lastResetDay: string;
+}
+
+export interface AppState {
+  enabled: boolean;
+  strictMode: boolean;
+  redirectMode: 'block-page' | 'close-tab';
+  blockEntries: BlockEntry[];
+  allowlist: string[];
+  temporaryUnlocks: Record<string, number>;
+  focusSchedule: FocusSchedule;
+  stats: BlockStats;
+}
+
+export interface MatchResult {
+  matched: boolean;
+  entryId?: string;
+  reason?: string;
+  displayValue?: string;
+}
+
+export interface PopupSnapshot {
+  state: AppState;
+  activeTab: {
+    id?: number;
+    url: string;
+    hostname: string;
+    blocked: boolean;
+    match: MatchResult;
+    allowlisted: boolean;
+  };
+}
+
+export interface RuntimeMessageMap {
+  GET_POPUP_SNAPSHOT: { response: PopupSnapshot };
+  GET_STATE: { response: AppState };
+  UPSERT_BLOCK_ENTRY: { payload: { input: string }; response: { ok: boolean; error?: string } };
+  DELETE_BLOCK_ENTRY: { payload: { id: string }; response: { ok: boolean } };
+  TOGGLE_ENABLED: { payload: { enabled: boolean }; response: { ok: boolean } };
+  SAVE_SCHEDULE: {
+    payload: { enabled: boolean; days: number[]; startMinutes: number; endMinutes: number };
+    response: { ok: boolean; error?: string };
+  };
+  SET_STRICT_MODE: { payload: { strictMode: boolean }; response: { ok: boolean } };
+  TOGGLE_ALLOWLIST_FOR_ACTIVE_TAB: { response: { ok: boolean; allowlisted: boolean } };
+  TEMPORARY_UNLOCK_HOST: { payload: { hostname: string; minutes: number }; response: { ok: boolean; expiresAt?: number } };
+  CHECK_URL: { payload: { url: string }; response: { blocked: boolean; allowlisted: boolean; match: MatchResult } };
+  GET_BLOCK_REASON: { response: { blocked: boolean; allowlisted: boolean; match: MatchResult } };
+}
+
+export const BLOCKED_PAGE = '/blocked.html';
+
+export const DEFAULT_STATE: AppState = {
   enabled: true,
-  adsEnabled: true,
-  trackersEnabled: true,
-  patternsEnabled: true,
-  popupsEnabled: true,
-  youtubeEnabled: true,
-  malwareEnabled: true,
-  smartBlockingEnabled: true,
-  annoyancesEnabled: true,
-  totalBlocked: 0,
-  adsBlocked: 0,
-  trackersBlocked: 0,
-  smartBlocked: 0,
-  phishingDetected: 0,
-  sessionBlocked: 0,
-  allowlist: [] as string[],
-  customRulesByDomain: {} as Record<string, string[]>,
-  lastActivities: [] as ActivityEvent[],
-  debugMode: false,
-  remoteUpdateUrl: '',
-  lastUpdateCheck: 0,
-  lastAppliedUpdate: '',
+  strictMode: true,
+  redirectMode: 'block-page',
+  blockEntries: [],
+  allowlist: [],
+  temporaryUnlocks: {},
+  focusSchedule: {
+    enabled: false,
+    days: [1, 2, 3, 4, 5],
+    startMinutes: 9 * 60,
+    endMinutes: 17 * 60,
+  },
+  stats: {
+    totalBlocked: 0,
+    blockedToday: 0,
+    lastBlockedAt: 0,
+    lastResetDay: '',
+  },
 };
 
-export interface ActivityEvent {
-  kind: 'blocking' | 'security' | 'learning' | 'info';
-  title: string;
-  detail?: string;
-  timestamp: number;
-}
+export const DYNAMIC_RULE_OFFSET = 10_000;
+export const PAGE_EVENT_NAME = 'shieldblock:url-change';
+export const PAGE_POLICY_EVENT = 'shieldblock:policy-change';
 
-export interface PageSummary {
-  hostname: string;
-  title: string;
-  status: string;
-  intrusionScore: number;
-  candidateSignals: number;
-  blockedHints: number;
-  sponsoredHints: number;
-}
-
-export interface RemoteRuleManifest {
-  version: string;
-  generatedAt: string;
-  payload: {
-    dynamicRules: Record<string, unknown>[];
-    siteFixes: {
-      youtubeExtraSelectors?: string[];
-      sponsoredKeywords?: string[];
-    };
-  };
-  integrity: {
-    algorithm: 'SHA-256';
-    sha256: string;
-  };
-}
-
-export const YOUTUBE_HOST_RE = /(^|\.)youtube\.com$/i;
-export const YOUTUBE_API_RE = /youtubei\/v1\/(player|next|browse)|get_video_info|player\?/i;
-export const SPONSORED_TEXT_RE = /\b(sponsored|promoted|install|sign up|visit site|shop now)\b/i;
-export const YOUTUBE_STRIP_KEYS = [
-  'adPlacements',
-  'adBreakHeartbeatParams',
-  'adBreakParams',
-  'adSlots',
-  'ad3Module',
-  'playerAds',
-  'playerAdsRenderer',
-  'serverAbrStreamingUrl',
-  'showPreroll',
-  'showMidroll',
-  'showPostroll',
-  'cueRanges',
-  'adSafetyReason',
-  'adReasons',
-  'adLoggingData',
-];
+export const YOUTUBE_INITIATOR_DOMAINS = [
+  'youtube.com',
+  'www.youtube.com',
+  'm.youtube.com',
+  'music.youtube.com',
+  'youtu.be',
+  'youtube-nocookie.com',
+  'www.youtube-nocookie.com',
+] as const;

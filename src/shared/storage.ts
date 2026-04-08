@@ -1,16 +1,24 @@
 import { ext } from './browser';
-import { DEFAULT_SETTINGS } from './constants';
+import { AppState, DEFAULT_STATE } from './constants';
 
-export type ExtensionSettings = typeof DEFAULT_SETTINGS;
-
-export async function getSettings<T extends keyof ExtensionSettings>(
-  keys?: T[] | null
-): Promise<Pick<ExtensionSettings, T> | ExtensionSettings> {
-  const requested = keys && keys.length ? keys : null;
-  const values = await ext.storage.local.get(requested as string[] | null);
-  return { ...DEFAULT_SETTINGS, ...values } as Pick<ExtensionSettings, T> | ExtensionSettings;
+export async function getState(): Promise<AppState> {
+  const values = await ext.storage.local.get(null);
+  return {
+    ...DEFAULT_STATE,
+    ...values,
+    focusSchedule: {
+      ...DEFAULT_STATE.focusSchedule,
+      ...(values.focusSchedule ?? {}),
+    },
+    stats: {
+      ...DEFAULT_STATE.stats,
+      ...(values.stats ?? {}),
+    },
+    blockEntries: Array.isArray(values.blockEntries) ? values.blockEntries : DEFAULT_STATE.blockEntries,
+    allowlist: Array.isArray(values.allowlist) ? values.allowlist : DEFAULT_STATE.allowlist,
+  } as AppState;
 }
 
-export async function setSettings(values: Partial<ExtensionSettings>): Promise<void> {
+export async function setState(values: Partial<AppState>): Promise<void> {
   await ext.storage.local.set(values);
 }

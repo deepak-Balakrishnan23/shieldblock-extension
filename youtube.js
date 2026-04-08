@@ -1,5 +1,5 @@
-// ShieldBlock AI — YouTube Ad Blocker v2.8
-// Hybrid approach: strip ad metadata in page context, then use lightweight UI cleanup.
+// ShieldBlock AI — YouTube ad cleanup
+// Keeps YouTube playable while removing ad UI and skipping ad interruptions.
 
 (function () {
   'use strict';
@@ -7,7 +7,6 @@
   if (!location.hostname.includes('youtube.com')) return;
 
   const STYLE_ID = 'shieldblock-youtube';
-  const INJECT_ID = 'shieldblock-youtube-hook';
   const state = {
     enabled: true,
     allowlist: [],
@@ -65,112 +64,6 @@
     return state.enabled && !matchesAllowlist(location.hostname, state.allowlist);
   }
 
-  function ensureHook() {
-    if (!canRun()) {
-      document.getElementById(INJECT_ID)?.remove();
-      return;
-    }
-    if (document.getElementById(INJECT_ID)) return;
-
-    const script = document.createElement('script');
-    script.id = INJECT_ID;
-    script.textContent = `(() => {
-      const STRIP_KEYS = [
-        'adPlacements', 'playerAds', 'adSlots', 'adBreakHeartbeatParams',
-        'adBreakParams', 'ad3Module', 'adSafetyReason', 'serverAbrStreamingUrl',
-        'showPreroll', 'showMidroll', 'showPostroll', 'cueRanges'
-      ];
-
-      function sanitize(obj) {
-        if (!obj || typeof obj !== 'object') return obj;
-
-        try {
-          for (const key of STRIP_KEYS) {
-            if (key in obj) {
-              if (Array.isArray(obj[key])) obj[key] = [];
-              else delete obj[key];
-            }
-          }
-
-          if (obj.playerResponse && typeof obj.playerResponse === 'object') {
-            sanitize(obj.playerResponse);
-          }
-
-          if (obj.streamingData && typeof obj.streamingData === 'object') {
-            delete obj.streamingData.serverAbrStreamingUrl;
-          }
-
-          if (obj.playabilityStatus && typeof obj.playabilityStatus === 'object') {
-            delete obj.playabilityStatus.adBreakStatus;
-          }
-        } catch (_) {}
-
-        return obj;
-      }
-
-      const originalParse = JSON.parse;
-      JSON.parse = function(...args) {
-        const parsed = originalParse.apply(this, args);
-        return sanitize(parsed);
-      };
-
-      const originalFetch = window.fetch;
-      window.fetch = async function(...args) {
-        const response = await originalFetch.apply(this, args);
-        try {
-          const url = typeof args[0] === 'string' ? args[0] : args[0]?.url || response.url || '';
-          if (!/youtubei\\/v1\\/(player|next|browse)|get_video_info|player\\?/.test(url)) return response;
-          const clone = response.clone();
-          const text = await clone.text();
-          const data = sanitize(JSON.parse(text));
-          return new Response(JSON.stringify(data), {
-            status: response.status,
-            statusText: response.statusText,
-            headers: response.headers,
-          });
-        } catch (_) {
-          return response;
-        }
-      };
-
-      const originalOpen = XMLHttpRequest.prototype.open;
-      const originalSend = XMLHttpRequest.prototype.send;
-      XMLHttpRequest.prototype.open = function(method, url, ...rest) {
-        this.__sbUrl = url;
-        return originalOpen.call(this, method, url, ...rest);
-      };
-      XMLHttpRequest.prototype.send = function(...args) {
-        this.addEventListener('readystatechange', function() {
-          try {
-            if (this.readyState !== 4) return;
-            if (!/youtubei\\/v1\\/(player|next|browse)|get_video_info|player\\?/.test(this.__sbUrl || '')) return;
-            if (!this.responseText) return;
-            const sanitized = JSON.stringify(sanitize(JSON.parse(this.responseText)));
-            Object.defineProperty(this, 'responseText', { configurable: true, value: sanitized });
-            Object.defineProperty(this, 'response', { configurable: true, value: sanitized });
-          } catch (_) {}
-        });
-        return originalSend.apply(this, args);
-      };
-
-      let initialPlayerResponse = null;
-      Object.defineProperty(window, 'ytInitialPlayerResponse', {
-        configurable: true,
-        get() { return initialPlayerResponse; },
-        set(value) { initialPlayerResponse = sanitize(value); },
-      });
-
-      let initialData = null;
-      Object.defineProperty(window, 'ytInitialData', {
-        configurable: true,
-        get() { return initialData; },
-        set(value) { initialData = sanitize(value); },
-      });
-    })();`;
-
-    (document.documentElement || document.head).appendChild(script);
-  }
-
   function ensureStyle() {
     if (!canRun()) {
       document.getElementById(STYLE_ID)?.remove();
@@ -204,6 +97,7 @@
   function flushActions(force = false) {
     if (!pendingAdActions) return;
     if (!force && pendingAdActions < 2) return;
+
     chrome.runtime.sendMessage({ type: 'INCREMENT_BLOCKED', category: 'ads', count: pendingAdActions });
     chrome.runtime.sendMessage({
       type: 'ACTIVITY_EVENT',
@@ -219,25 +113,25 @@
     flushActions();
   }
 
-  function hideElement(el) {
-    if (!el) return;
-    if (el.dataset.shieldblockHidden === '1') return;
-    el.dataset.shieldblockHidden = '1';
-    el.style.display = 'none';
-    el.style.visibility = 'hidden';
+  function hideElement(element) {
+    if (!element || element.dataset.shieldblockHidden === '1') return;
+    element.dataset.shieldblockHidden = '1';
+    element.style.display = 'none';
+    element.style.visibility = 'hidden';
     markAction();
   }
 
   function removeSponsoredSidebarCards() {
     if (!canRun()) return;
-    document.querySelectorAll(FEED_AD_SELECTORS.join(',')).forEach((el) => {
-      const text = (el.innerText || '').trim();
-      const hrefs = Array.from(el.querySelectorAll('a[href]')).map((a) => a.href).join(' ');
+
+    document.querySelectorAll(FEED_AD_SELECTORS.join(',')).forEach((element) => {
+      const text = (element.innerText || '').trim();
+      const hrefs = Array.from(element.querySelectorAll('a[href]')).map((link) => link.href).join(' ');
       if (
         SPONSORED_TEXT.test(text) ||
-        /googleadservices|doubleclick|one\\.google\\.com|adurl=|gclid=/.test(hrefs)
+        /googleadservices|doubleclick|one\.google\.com|adurl=|gclid=/.test(hrefs)
       ) {
-        hideElement(el);
+        hideElement(element);
       }
     });
   }
@@ -254,19 +148,36 @@
     return false;
   }
 
-  function blockYouTubeAds() {
+  function speedPastAdBreak() {
+    const video = document.querySelector('video');
+    if (!(video instanceof HTMLVideoElement)) return false;
+    if (!document.documentElement.classList.contains('ad-showing')) return false;
+
+    try {
+      video.muted = true;
+      video.playbackRate = 16;
+      if (Number.isFinite(video.duration) && video.duration > 0) {
+        video.currentTime = Math.max(0, video.duration - 0.2);
+      }
+      markAction();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function cleanupYoutubeAds() {
     if (!canRun()) return;
-    ensureHook();
     ensureStyle();
     removeSponsoredSidebarCards();
     clickSkipButton();
+    speedPastAdBreak();
   }
 
   function refreshState(callback) {
     chrome.storage.local.get(['enabled', 'youtubeEnabled', 'allowlist'], (data) => {
       state.enabled = data.enabled !== false && data.youtubeEnabled !== false;
       state.allowlist = data.allowlist || [];
-      ensureHook();
       ensureStyle();
       callback?.();
     });
@@ -275,31 +186,31 @@
   const pageObserver = new MutationObserver((mutations) => {
     if (!canRun()) return;
     if (!mutations.some((mutation) => mutation.addedNodes.length > 0)) return;
-    blockYouTubeAds();
+    cleanupYoutubeAds();
   });
 
   pageObserver.observe(document.documentElement, { childList: true, subtree: true });
 
   function startPolling() {
     clearInterval(intervalId);
-    intervalId = setInterval(blockYouTubeAds, 250);
+    intervalId = setInterval(cleanupYoutubeAds, 250);
   }
 
   chrome.runtime.onMessage.addListener((message) => {
     if (['TOGGLE_EXTENSION', 'TOGGLE_YOUTUBE', 'ALLOWLIST_UPDATED'].includes(message.type)) {
-      refreshState(blockYouTubeAds);
+      refreshState(cleanupYoutubeAds);
     }
   });
 
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') return;
     if (changes.enabled || changes.youtubeEnabled || changes.allowlist) {
-      refreshState(blockYouTubeAds);
+      refreshState(cleanupYoutubeAds);
     }
   });
 
   refreshState(() => {
-    blockYouTubeAds();
+    cleanupYoutubeAds();
     startPolling();
   });
 

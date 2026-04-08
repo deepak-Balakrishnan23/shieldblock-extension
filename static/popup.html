@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ShieldBlock</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #08110f;
+        --panel: #0f1c19;
+        --panel-2: #132723;
+        --text: #edf7f4;
+        --muted: #93b8ae;
+        --line: rgba(130, 255, 210, 0.12);
+        --accent: #58ffc8;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        width: 360px;
+        margin: 0;
+        font: 14px/1.4 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: radial-gradient(circle at top, rgba(88,255,200,0.16), transparent 42%), var(--bg);
+        color: var(--text);
+      }
+
+      .wrap { padding: 16px; }
+      .hero, .card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; }
+      .hero { padding: 14px; display: grid; gap: 10px; }
+      .brand { display: flex; align-items: center; justify-content: space-between; }
+      .brand h1 { margin: 0; font-size: 22px; }
+      .brand span { color: var(--accent); }
+      .power {
+        border: 0; border-radius: 999px; background: rgba(88,255,200,0.14); color: var(--accent);
+        padding: 10px 14px; cursor: pointer;
+      }
+      .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 12px; }
+      .card { padding: 12px; }
+      .metric { font-size: 28px; font-weight: 700; }
+      .metric-lg { font-size: 36px; font-weight: 700; color: var(--accent); }
+      .label, .muted, .row span, .empty { color: var(--muted); }
+      .stack { display: grid; gap: 12px; margin-top: 12px; }
+      .toggle { display: flex; justify-content: space-between; align-items: center; }
+      .toggle input { accent-color: var(--accent); }
+      .row { display: grid; gap: 3px; padding: 8px 0; border-top: 1px solid var(--line); }
+      .row:first-child { border-top: 0; padding-top: 0; }
+      .site, .activity, .allowlist { min-height: 70px; }
+      .actions { display: flex; gap: 8px; margin-top: 10px; }
+      .actions button, .allowlist-add {
+        border: 0; border-radius: 12px; background: var(--panel-2); color: var(--text); padding: 10px 12px; cursor: pointer;
+      }
+      .allowlist-bar { display: flex; gap: 8px; }
+      .allowlist-bar input {
+        flex: 1; border-radius: 12px; border: 1px solid var(--line); background: #091412; color: var(--text); padding: 10px 12px;
+      }
+      .pill {
+        border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 999px; padding: 6px 10px; margin: 4px 6px 0 0; cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <section class="hero">
+        <div class="brand">
+          <h1>Shield<span>Block</span></h1>
+          <button class="power" id="power" data-enabled="true">Power</button>
+        </div>
+        <div id="status">Adaptive protection active</div>
+      </section>
+
+      <section class="grid">
+        <div class="card"><div class="metric" id="total">0</div><div class="label">Blocked total</div></div>
+        <div class="card"><div class="metric" id="rules">0</div><div class="label">Bundled rules</div></div>
+        <div class="card"><div class="metric" id="ads">0</div><div class="label">Ads</div></div>
+        <div class="card"><div class="metric" id="trackers">0</div><div class="label">Trackers</div></div>
+      </section>
+
+      <section class="stack">
+        <div class="card"><div class="metric" id="session">0</div><div class="label">This session</div></div>
+
+        <div class="card">
+          <div class="toggle"><span>YouTube protections</span><input id="youtube-toggle" type="checkbox" checked /></div>
+          <div class="toggle"><span>Annoyance cleanup</span><input id="annoyances-toggle" type="checkbox" checked /></div>
+          <div class="actions">
+            <button id="picker">Teach this site</button>
+          </div>
+        </div>
+
+        <div class="card site" id="site"></div>
+        <div class="card activity" id="activity"></div>
+
+        <div class="card">
+          <div class="allowlist-bar">
+            <input id="allowlist-input" placeholder="example.com" />
+            <button class="allowlist-add" id="allowlist-add">Allow</button>
+          </div>
+          <div class="allowlist" id="allowlist"></div>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="./popup.js"></script>
+  </body>
+</html>

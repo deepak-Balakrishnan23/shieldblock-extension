@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ShieldBlock AI</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d0d0f;--surface:#161618;--surface2:#1c1c1f;--border:#252528;
+  --accent:#59f0b5;--accent2:#76d8ff;--adim:rgba(89,240,181,0.1);--aglow:rgba(89,240,181,0.22);
+  --text:#f0f0f2;--muted:#6b6b75;--danger:#ff4d6d;--warn:#ffbe0b;
+  --ai:#91a7ff;--ml:#76d8ff;
+}
+body{width:340px;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px}
+
+/* Header */
+.hdr{padding:13px 16px;display:flex;align-items:center;justify-content:space-between;background:var(--surface);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:8px}
+.shield svg{width:30px;height:30px;filter:drop-shadow(0 0 8px var(--aglow))}
+.bname{font-size:14px;font-weight:800;letter-spacing:-.4px}.bname span{background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent}
+.badge{font-size:9px;font-weight:700;letter-spacing:1px;background:linear-gradient(135deg,var(--ai),var(--ml));color:#fff;padding:2px 7px;border-radius:10px;margin-left:4px}
+.pwr{width:36px;height:36px;border-radius:50%;border:2px solid var(--border);background:var(--bg);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
+.pwr.on{border-color:var(--accent);background:var(--adim);box-shadow:0 0 10px var(--aglow)}
+.pwr svg{width:15px;height:15px;stroke:var(--muted);transition:stroke .2s}
+.pwr.on svg{stroke:var(--accent)}
+
+/* Status */
+.sbar{padding:7px 16px;display:flex;align-items:center;gap:7px;background:var(--adim);border-bottom:1px solid rgba(0,229,160,.15)}
+.sbar.off{background:rgba(255,77,109,.07);border-color:rgba(255,77,109,.15)}
+.sdot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px var(--accent);animation:pulse 2s ease infinite}
+.sbar.off .sdot{background:var(--danger);box-shadow:0 0 6px var(--danger);animation:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.stxt{font-size:10px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--accent)}
+.sbar.off .stxt{color:var(--danger)}
+
+/* Tabs */
+.tabs{display:flex;background:var(--surface);border-bottom:1px solid var(--border)}
+.tab{flex:1;padding:9px 0;text-align:center;font-size:11px;font-weight:600;letter-spacing:.3px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .2s}
+.tab.on{color:var(--accent);border-color:var(--accent)}
+
+.panel{display:none;padding:14px 16px}
+.panel.on{display:block}
+
+/* Stats */
+.shero{text-align:center;padding:6px 0 12px}
+.bnum{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:42px;font-weight:600;color:var(--accent);line-height:1;letter-spacing:-2px}
+.blbl{font-size:10px;color:var(--muted);margin-top:3px;text-transform:uppercase;letter-spacing:.8px}
+
+.sg3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}
+.sg2{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:7px}
+.sc{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px 7px;text-align:center}
+.sc-n{font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:600;color:var(--text)}
+.sc-l{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}
+.sc.ai .sc-n{color:var(--ai)}.sc.ml .sc-n{color:var(--ml)}.sc.ph .sc-n{color:var(--danger)}
+
+/* AI Panel */
+.ai-hdr{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.ai-icon{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px}
+.ai-icon.h{background:linear-gradient(135deg,rgba(167,139,250,.2),rgba(96,165,250,.2));border:1px solid rgba(167,139,250,.3)}
+.ai-icon.m{background:linear-gradient(135deg,rgba(96,165,250,.2),rgba(52,211,153,.15));border:1px solid rgba(96,165,250,.3)}
+.ai-ttl{font-size:12px;font-weight:600;color:var(--text)}
+.ai-sub{font-size:10px;color:var(--muted)}
+
+.rbtn{width:100%;padding:9px;background:linear-gradient(135deg,rgba(167,139,250,.15),rgba(96,165,250,.15));border:1px solid rgba(167,139,250,.4);border-radius:9px;color:var(--ai);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .2s;margin-bottom:10px}
+.rbtn:hover{background:rgba(167,139,250,.2)}
+
+.row{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.rlbl{font-size:11px;color:var(--muted)}.rval{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600}
+.rval.ai{color:var(--ai)}.rval.ml{color:var(--ml)}
+input[type=range]{width:100%;accent-color:var(--ai);margin:2px 0 10px;display:block}
+input[type=range].ml{accent-color:var(--ml)}
+
+.seclbl{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:6px}
+.rlist{max-height:72px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:5px 8px}
+.ritem{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9px;color:var(--accent);padding:2px 0;border-bottom:1px solid var(--border)}
+.ritem:last-child{border:none}
+.empty{font-size:10px;color:var(--muted);text-align:center;padding:8px}
+.insight{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px;margin-bottom:10px}
+.insight-title{font-size:11px;font-weight:600;color:var(--text);margin-bottom:4px}
+.insight-sub{font-size:10px;color:var(--muted);line-height:1.4}
+.insight-score{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:20px;color:var(--accent);margin-top:6px}
+.activity{max-height:88px;overflow-y:auto;background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:5px 8px}
+.aitem{padding:5px 0;border-bottom:1px solid var(--border)}
+.aitem:last-child{border-bottom:none}
+.atitle{font-size:10px;color:var(--text)}
+.adetail{font-size:9px;color:var(--muted);margin-top:2px;word-break:break-word}
+
+/* Filters */
+.secrow{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;margin-top:10px}
+.fr{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border)}
+.fr:last-child{border:none}
+.fi{display:flex;align-items:center;gap:9px}
+.fic{width:26px;height:26px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px}
+.fn{font-size:12px;font-weight:500;color:var(--text)}.fc{font-size:10px;color:var(--muted)}
+.fic.ads{background:rgba(255,190,11,.12)}.fic.trk{background:rgba(0,229,160,.1)}
+.fic.pop{background:rgba(255,77,109,.1)}.fic.yt{background:rgba(255,80,80,.12)}
+.fic.ck{background:rgba(160,130,255,.12)}
+.fic.ai{background:linear-gradient(135deg,rgba(167,139,250,.15),rgba(96,165,250,.15))}
+.fic.ml{background:linear-gradient(135deg,rgba(96,165,250,.15),rgba(52,211,153,.12))}
+.fic.ph{background:rgba(255,190,11,.12)}
+
+/* Toggle */
+.tgl{position:relative;width:32px;height:18px;cursor:pointer;flex-shrink:0}
+.tgl input{opacity:0;width:0;height:0;position:absolute}
+.tk{position:absolute;inset:0;background:var(--border);border-radius:9px;transition:background .2s}
+.tgl input:checked+.tk{background:var(--accent)}
+.tb{position:absolute;top:2px;left:2px;width:14px;height:14px;background:white;border-radius:50%;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.tgl input:checked~.tb{transform:translateX(14px)}
+
+/* Allowlist */
+.alinput{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:7px 10px;color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:12px;outline:none}
+.alinput:focus{border-color:var(--accent)}
+.albtn{margin-top:6px;width:100%;padding:7px;background:var(--adim);border:1px solid var(--accent);border-radius:7px;color:var(--accent);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:11px;font-weight:600;cursor:pointer;transition:all .2s}
+.albtn:hover{background:rgba(0,229,160,.2)}
+.alitem{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;margin-top:5px}
+.aldomain{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;color:var(--accent)}
+.alrm{background:none;border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:0 2px}
+
+/* Footer */
+.ftr{padding:9px 16px;display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--border)}
+.rstbtn{font-size:10px;color:var(--muted);background:none;border:none;cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;transition:color .2s}
+.rstbtn:hover{color:var(--danger)}
+.ver{font-size:10px;color:var(--border);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+
+body.off .panel,body.off .tabs{opacity:.4;pointer-events:none}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="brand">
+    <div class="shield">
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="sbg" x1="6" y1="4" x2="26" y2="28" gradientUnits="userSpaceOnUse">
+            <stop stop-color="#76FFD1"/>
+            <stop offset="1" stop-color="#76D8FF"/>
+          </linearGradient>
+        </defs>
+        <path d="M16 3L5.5 7.5V15c0 6.2 4.4 11.9 10.5 13.3C22.1 26.9 26.5 21.2 26.5 15V7.5L16 3z" fill="url(#sbg)" opacity=".12"/>
+        <path d="M16 3L5.5 7.5V15c0 6.2 4.4 11.9 10.5 13.3C22.1 26.9 26.5 21.2 26.5 15V7.5L16 3z" stroke="url(#sbg)" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M12.1 15.7l2.6 2.7 5.3-6.1" stroke="url(#sbg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div><span class="bname">Shield<span>Block</span></span><span class="badge">AI</span></div>
+  </div>
+  <button class="pwr on" id="pwr">
+    <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18.36 6.64A9 9 0 1 1 5.64 6.64"/><line x1="12" y1="2" x2="12" y2="12"/>
+    </svg>
+  </button>
+</div>
+
+<div class="sbar" id="sbar">
+  <div class="sdot"></div>
+  <span class="stxt" id="stxt">Adaptive Protection Active</span>
+</div>
+
+<div class="tabs">
+  <div class="tab on" data-t="stats">Stats</div>
+  <div class="tab" data-t="ai">AI</div>
+  <div class="tab" data-t="filters">Filters</div>
+  <div class="tab" data-t="allow">Allowlist</div>
+</div>
+
+<!-- STATS -->
+<div class="panel on" id="panel-stats">
+  <div class="shero">
+    <div class="bnum" id="tot">0</div>
+    <div class="blbl">Blocked Actions</div>
+  </div>
+  <div class="sg3">
+    <div class="sc"><div class="sc-n" id="cAds">0</div><div class="sc-l">Ads</div></div>
+    <div class="sc"><div class="sc-n" id="cTrk">0</div><div class="sc-l">Trackers</div></div>
+    <div class="sc"><div class="sc-n" id="cSess">0</div><div class="sc-l">Session</div></div>
+  </div>
+  <div class="sg3" style="margin-top:7px">
+    <div class="sc ai"><div class="sc-n" id="cAI">0</div><div class="sc-l">Heuristic</div></div>
+    <div class="sc ml"><div class="sc-n" id="cML">0</div><div class="sc-l">ML Model</div></div>
+    <div class="sc ph"><div class="sc-n" id="cPh">0</div><div class="sc-l">Phishing</div></div>
+  </div>
+  <div class="insight" style="margin-top:10px">
+    <div class="insight-title" id="siteTitle">Current Site Insight</div>
+    <div class="insight-sub" id="siteStatus">Loading site insight...</div>
+    <div class="insight-score" id="siteScore">--</div>
+  </div>
+  <div class="seclbl">Recent Privacy Actions</div>
+  <div class="activity" id="activityList"><div class="empty">No recent activity yet.</div></div>
+</div>
+
+<!-- AI -->
+<div class="panel" id="panel-ai">
+  <div class="ai-hdr">
+    <div class="ai-icon h">🧠</div>
+    <div><div class="ai-ttl">Heuristic Engine</div><div class="ai-sub">20 signals · local DOM analysis · adaptive per site</div></div>
+  </div>
+
+  <div class="row">
+    <span class="rlbl">Sensitivity</span>
+    <span class="rval ai" id="hVal">72</span>
+  </div>
+  <input type="range" id="hSlider" min="40" max="95" value="72">
+
+  <div class="ai-hdr" style="margin-top:4px">
+    <div class="ai-icon m">🤖</div>
+    <div><div class="ai-ttl">ML Classifier</div><div class="ai-sub">100 trees · candidate gated · adaptive threshold</div></div>
+  </div>
+
+  <div class="row">
+    <span class="rlbl">Confidence threshold</span>
+    <span class="rval ml" id="mVal">88%</span>
+  </div>
+  <input type="range" class="ml" id="mSlider" min="70" max="99" value="88">
+
+  <button class="rbtn" id="pickBtn">Teach This Site</button>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+    <span class="seclbl" style="margin:0">Smart Site Rules</span>
+    <button id="clrRules" style="font-size:10px;color:var(--danger);background:none;border:none;cursor:pointer;font-family:'Space Grotesk',sans-serif">Clear all</button>
+  </div>
+  <div class="rlist" id="rulesList"><div class="empty">No custom rules yet.</div></div>
+</div>
+
+<!-- FILTERS -->
+<div class="panel" id="panel-filters">
+  <span class="seclbl">Network Filters</span>
+  <div class="fr">
+    <div class="fi"><div class="fic ads">📢</div><div><div class="fn">Ad Networks</div><div class="fc">12,000 imported ad rules</div></div></div>
+    <label class="tgl"><input type="checkbox" id="tAds" checked><div class="tk"></div><div class="tb"></div></label>
+  </div>
+  <div class="fr">
+    <div class="fi"><div class="fic trk">👁️</div><div><div class="fn">Trackers</div><div class="fc">9,000 privacy rules</div></div></div>
+    <label class="tgl"><input type="checkbox" id="tTrk" checked><div class="tk"></div><div class="tb"></div></label>
+  </div>
+  <div class="fr">
+    <div class="fi"><div class="fic trk" style="background:rgba(96,165,250,.1)">🔗</div><div><div class="fn">URL Patterns</div><div class="fc">8,000 high-signal patterns</div></div></div>
+    <label class="tgl"><input type="checkbox" id="tPat" checked><div class="tk"></div><div class="tb"></div></label>
+  </div>
+  <div class="fr">
+    <div class="fi"><div class="fic pop" style="background:rgba(255,77,109,.08)">🦠</div><div><div class="fn">Malware Domains</div><div class="fc">48 malicious domains</div></div></div>
+    <label class="tgl"><input type="checkbox" id="tMal" checked><div class="tk"></div><div class="tb"></div></label>
+  </div>
+  <div class="fr">
+    <div class="fi"><div class="fic pop">🚫</div><div><div class="fn">Popup Ads</div><div class="fc">1,226 annoyance and popup rules</div></div></div>
+    <label class="tgl"><input type="checkbox" id="tPop" checked><div class="tk"></div><div class="tb"></div></label>
+  </div>
+  <div class="fr">
+    <div class="fi"><div class="fic yt">▶️</div><div><div class="fn">YouTube Ads</div><div class="fc">Network + cosmetic skip</div></div></div>
+    <label class="tgl"><input type="checkbox" id="tYT" checked><div class="tk"></div><div class="tb"></div></label>
+  </div>
+
+  <div class="secrow"><span class="seclbl" style="margin:0">AI Filters</span></div>
+  <div class="fr">
+    <div class="fi"><div class="fic ai">🧠</div><div><div class="fn">Heuristic AI</div><div class="fc">Native & social ads</div></div></div>
+    <label class="tgl"><input type="checkbox" id="tAI" checked><div class="tk"></div><div class="tb"></div></label>
+  </div>
+  <div class="fr">
+    <div class="fi"><div class="fic ml">🤖</div><div><div class="fn">ML Classifier</div><div class="fc">Learns from heuristics and site feedback</div></div></div>
+    <label class="tgl"><input type="checkbox" id="tML" checked><div class="tk"></div><div class="tb"></div></label>
+  </div>
+  <div class="fr">
+    <div class="fi"><div class="fic ph">⚠️</div><div><div class="fn">Phishing Guard</div><div class="fc">URL risk scoring</div></div></div>
+    <label class="tgl"><input type="checkbox" id="tPh" checked><div class="tk"></div><div class="tb"></div></label>
+  </div>
+  <div class="fr">
+    <div class="fi"><div class="fic ck">🍪</div><div><div class="fn">Cookie Banners</div><div class="fc">GDPR, newsletters, prompts</div></div></div>
+    <label class="tgl"><input type="checkbox" id="tCk" checked><div class="tk"></div><div class="tb"></div></label>
+  </div>
+</div>
+
+<!-- ALLOWLIST -->
+<div class="panel" id="panel-allow">
+  <div style="margin-bottom:10px">
+    <div class="seclbl">Disable ShieldBlock on specific sites</div>
+    <div style="font-size:10px;color:var(--muted);margin-bottom:8px;line-height:1.5">Add domains where ads should show (e.g. sites you want to support). All AI and network blocking pauses for these domains.</div>
+    <input class="alinput" id="alInput" placeholder="example.com" type="text">
+    <button class="albtn" id="alAdd">+ Add to allowlist</button>
+  </div>
+  <div class="seclbl">Current allowlist</div>
+  <div id="alList"><div class="empty">No allowed sites. All sites are protected.</div></div>
+</div>
+
+<div class="ftr">
+  <button class="rstbtn" id="rstBtn">Reset Stats</button>
+  <span class="ver">v2.5.0</span>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>

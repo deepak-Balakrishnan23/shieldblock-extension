@@ -1,238 +1,864 @@
-// ShieldBlock AI — Advanced Cosmetic Filter v2.4
-// Hides ad containers via CSS. Covers AdBlock Tester specific selectors
-// plus universal ad containers from EasyList cosmetic rules.
-
-(function () {
+(function initializeShieldBlockCosmeticEngine() {
   'use strict';
 
-  if (location.hostname.includes('youtube.com')) return;
-
-  let enabled = true;
-  let allowlisted = false;
-
-  function matchesAllowlist(hostname, allowlist) {
-    return (allowlist || []).some((entry) => hostname === entry || hostname.endsWith(`.${entry}`));
+  if (globalThis.__shieldblockCosmeticInitialized === true) {
+    return;
   }
 
-  function refreshState() {
-    chrome.storage.local.get(['enabled', 'allowlist'], (d) => {
-      enabled = d.enabled !== false;
-      allowlisted = matchesAllowlist(location.hostname, d.allowlist);
-      if (!enabled || allowlisted) {
-        document.getElementById('shieldblock-cosmetic')?.remove();
-        return;
-      }
-      injectCosmetic();
-    });
+  globalThis.__shieldblockCosmeticInitialized = true;
+
+  const GENERIC_STYLE_ID = 'shieldblock-generic';
+  const DOMAIN_STYLE_PREFIX = 'shieldblock-domain-';
+  const OBSERVER_ATTRIBUTE = 'data-shieldblock-cosmetic-observing';
+  const INITIAL_HIDDEN_DELAY_MS = 500;
+  const BAIT_CLASS_EXCEPTIONS = new Set([
+    'adsbox',
+    'ad-placeholder',
+    'ad-detect',
+    'adblocker-test',
+  ]);
+  const BAIT_NOT_SUFFIX = [...BAIT_CLASS_EXCEPTIONS]
+    .map((className) => `:not(.${className}):not([class~="${className}"])`)
+    .join('');
+  const GENERIC_CLASS_NAMES = Object.freeze([
+    'ad',
+    'ads',
+    'adsbygoogle',
+    'ad-unit',
+    'ad-container',
+    'ad-wrapper',
+    'ad-banner',
+    'ad-slot',
+    'ad-block',
+    'advertisement',
+    'advertising',
+    'advert',
+    'sponsor',
+    'sponsored',
+    'sponsored-content',
+    'sponsored-post',
+    'promoted',
+    'promo',
+    'native-ad',
+    'native-ads',
+    'dfp-ad',
+    'gpt-ad',
+    'gpt-slot',
+    'outbrain-widget',
+    'taboola-widget',
+    'mgid-widget',
+    'revcontent-widget',
+    'adfox-block',
+    'yandex-rtb',
+    'banner-ad',
+    'google-ad',
+    'adbox',
+    'adzone',
+    'adframe',
+    'adspace',
+    'adlabel',
+    'adholder',
+    'ad-rail',
+    'adbreak',
+    'admarker',
+    'ad-leaderboard',
+    'ad-sidebar',
+    'ad-inline',
+    'ad-native',
+    'ad-tile',
+    'ad-callout',
+    'promo-block',
+    'promo-unit',
+    'sponsor-card',
+    'partner-content',
+    'partner-banner',
+    'commercial-unit',
+    'brand-studio',
+    'brand-post',
+    'paid-content',
+    'paid-post',
+  ]);
+  const GENERIC_ID_NAMES = Object.freeze([
+    'ad',
+    'ads',
+    'advertisement',
+    'ad-container',
+    'ad-banner',
+    'ad-slot',
+    'google-ads',
+    'dfp-ad',
+    'sponsored',
+    'promo-slot',
+    'outbrain',
+    'taboola',
+  ]);
+  const GENERIC_ATTRIBUTE_SELECTORS = Object.freeze([
+    '[data-ad]',
+    '[data-ads]',
+    '[data-adunit]',
+    '[data-slot]',
+    '[data-google-query-id]',
+    '[data-ad-client]',
+    '[data-ad-slot]',
+    '[data-ad-container]',
+    '[data-ad-name]',
+    '[data-ad-label]',
+    '[data-sponsored]',
+    '[data-native-ad]',
+    '[data-promoted]',
+    '[data-ad-placement]',
+    '[data-ad-format]',
+    '[data-testid="ad"]',
+    '[data-test-id="ad"]',
+    '[aria-label="Advertisement"]',
+    '[aria-label="Sponsored"]',
+    '[role="complementary"][aria-label*="ad"]',
+  ]);
+  const IFRAME_PATTERNS = Object.freeze([
+    'iframe[src*="doubleclick"]',
+    'iframe[src*="googlesyndication"]',
+    'iframe[src*="adnxs"]',
+    'iframe[src*="taboola"]',
+    'iframe[src*="outbrain"]',
+    'iframe[src*="pubmatic"]',
+    'iframe[src*="rubiconproject"]',
+    'iframe[src*="criteo"]',
+    'iframe[src*="openx"]',
+    'iframe[src*="moatads"]',
+  ]);
+  const DIRECT_HIDE_SELECTORS = Object.freeze([
+    '.adsbygoogle',
+    '.ad-slot',
+    '.ad-banner',
+    '.advertisement',
+    '.sponsored-content',
+    '.promoted',
+    '[data-ad]',
+    '[data-ad-slot]',
+    '[data-google-query-id]',
+    'iframe[src*="doubleclick"]',
+    'iframe[src*="googlesyndication"]',
+    'iframe[src*="adnxs"]',
+  ]);
+  const GENERIC_COSMETICS = Object.freeze(Array.from(new Set([
+    ...GENERIC_CLASS_NAMES.flatMap((className) => [
+      `.${className}`,
+      `[class~="${className}"]`,
+      `[class^="${className}-"]`,
+      `[class*=" ${className}-"]`,
+    ]),
+    ...GENERIC_ID_NAMES.flatMap((idName) => [
+      `#${idName}`,
+      `[id="${idName}"]`,
+      `[id^="${idName}-"]`,
+      `[id*="-${idName}"]`,
+    ]),
+    ...GENERIC_ATTRIBUTE_SELECTORS,
+    ...IFRAME_PATTERNS,
+  ])));
+  const DOMAIN_COSMETICS = Object.freeze({
+    'youtube.com': Object.freeze([
+      /* --- Video player ad elements --- */
+      '.ytp-ad-overlay-container',
+      '.ytp-ad-text-overlay',
+      '.ytp-ad-skip-button-container',
+      '.ytp-ad-skip-button-modern',
+      '.ytp-ad-skip-button',
+      '.ytp-skip-ad-button',
+      '.ytp-ad-module',
+      '.ytp-ad-player-overlay',
+      '.ytp-ad-player-overlay-instream-info',
+      '.ytp-ad-visit-advertiser-button',
+      '.ytp-ad-button-icon',
+      '.video-ads',
+      /* --- 2026 updated selectors --- */
+      'ytd-ad-slot-renderer',
+      'yt-mealbar-promo-renderer',
+      '.ytd-mealbar-promo-renderer',
+      'ytd-statement-banner-renderer',
+      'ytd-primetime-promo-renderer',
+      'ytd-brand-video-shelf-renderer',
+      'ytd-brand-video-singleton-renderer',
+      'ytd-action-companion-ad-renderer',
+      'ytd-display-ad-renderer',
+      'ytd-rich-item-renderer:has(ytd-ad-slot-renderer)',
+
+      /* --- Companion / display / overlay ads on video player --- */
+      '.ytp-ce-element',
+      '.ytp-ce-covering-overlay',
+      '.ytp-ce-element-shadow',
+      '.ytp-cards-teaser',
+      '.ytp-cards-button',
+      '#player-ads',
+      '#masthead-ad',
+      '.ytd-banner-promo-renderer',
+      'ytd-banner-promo-renderer',
+      '#ad-container',
+      '.ad-container',
+      '.ytd-companion-slot-renderer',
+      'ytd-companion-slot-renderer',
+      '#companion',
+      '#companion-slot',
+      '.iv-branding',
+      '.ytp-iv-video-content',
+      '.video-ads',
+      '#movie_player .ytp-ad-module',
+      '.ytd-promoted-sparkles-web-renderer',
+      'ytd-promoted-sparkles-web-renderer',
+      '.ytd-promoted-video-renderer',
+      'ytd-promoted-video-renderer',
+      'ytd-search-pyv-renderer',
+      'ytd-promoted-sparkles-text-search-renderer',
+      '[class*="sparkles-light-cta"]',
+      '#panel-pages ytd-banner-promo-renderer',
+      'ytd-in-feed-ad-layout-renderer',
+      '#contents ytd-ad-slot-renderer',
+      '#masthead-ad',
+      'ytd-ad-slot-renderer',
+      'ytd-promoted-sparkles-web-renderer',
+      'ytd-promoted-video-renderer',
+      'ytd-display-ad-renderer',
+      'ytd-in-feed-ad-layout-renderer',
+      '.ytd-promoted-sparkles-text-search-renderer',
+      '#player-ads',
+      '.ytp-ad-progress',
+      '.ytp-ad-progress-list',
+      '.video-ads.ytp-ad-module',
+      'tp-yt-paper-dialog:has(yt-upsell-dialog-renderer)',
+      'tp-yt-paper-dialog:has(ytd-enforcement-message-view-model)',
+      'tp-yt-paper-dialog:has(yt-playability-error-supported-renderers)',
+      'tp-yt-iron-overlay-backdrop',
+      'yt-playability-error-supported-renderers',
+      'ytd-enforcement-message-view-model',
+      '.ytd-enforcement-message-view-model',
+      'yt-mealbar-promo-renderer',
+      'ytd-rich-item-renderer:has(ytd-display-ad-renderer)',
+      'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"]',
+      'ytm-promoted-sparkles-web-renderer',
+    ]),
+    'facebook.com': Object.freeze([
+      '[data-pagelet*="ad"]',
+      'div[aria-label="Sponsored"]',
+      'a[aria-label="Sponsored"]',
+      '[data-testid="placementTracking"]',
+      'div[data-pagelet*="FeedUnit"][role="article"]:has([aria-label="Sponsored"])',
+      '._5u5j',
+    ]),
+    'twitter.com': Object.freeze([
+      '[data-testid="placementTracking"]',
+      '[data-testid="trend"] [aria-label="Promoted"]',
+      'article:has([data-testid="placementTracking"])',
+      'section[aria-label*="Who to follow"]',
+    ]),
+    'x.com': Object.freeze([
+      '[data-testid="placementTracking"]',
+      '[data-testid="trend"] [aria-label="Promoted"]',
+      'article:has([data-testid="placementTracking"])',
+      'section[aria-label*="Who to follow"]',
+    ]),
+    'reddit.com': Object.freeze([
+      'shreddit-ad-post',
+      '[data-testid="post-container"]:has([data-click-id="ad"])',
+      '[data-promoted="true"]',
+      '.promotedlink',
+      'div[id^="adblocktest"]',
+    ]),
+    'instagram.com': Object.freeze([
+      'article:has(span[aria-label="Sponsored"])',
+      'article:has(a[href*="/ads/"])',
+      'div[role="dialog"] article:has(span[aria-label="Sponsored"])',
+      'section main article:has(header span[dir="auto"]:is(:first-child))',
+    ]),
+    'linkedin.com': Object.freeze([
+      '.ad-banner-container',
+      '.sponsored-content',
+      '[data-ad-banner]',
+      '.feed-shared-update-v2:has([aria-label="Promoted"])',
+      '.ad-feedback-container',
+      '.sponsored-update',
+    ]),
+    'cnn.com': Object.freeze([
+      '.ad-slot-header',
+      '.ad-slot',
+      '.zn-ad-container',
+      '[data-purpose="ad-slot"]',
+      '.ad-smart-wrap',
+    ]),
+    'forbes.com': Object.freeze([
+      '.top-ad-container',
+      '.fbs-ad--top-wrapper',
+      '.fbs-ad--recirculation',
+      '[data-ad-unit]',
+      '.ntv-ad',
+    ]),
+    'wired.com': Object.freeze([
+      '.PersistentBottomWrapper',
+      '.AdSlot',
+      '[data-testid="GenericAd"]',
+      '.ad__slot',
+      '.ad__container',
+    ]),
+  });
+  const PROCEDURAL_RULES = Object.freeze([
+    { type: 'has', base: 'article', child: '.adsbygoogle, [data-ad], [data-ad-slot], iframe[src*="doubleclick"]' },
+    { type: 'has', base: 'section', child: '.adsbygoogle, [data-ad], [data-ad-slot], iframe[src*="doubleclick"]' },
+    { type: 'has', base: 'div', child: '.outbrain-widget, .taboola-widget, .mgid-widget, .revcontent-widget' },
+    { type: 'has', base: 'aside', child: '.sponsored, .promoted, [aria-label="Sponsored"]' },
+    { type: 'has', base: 'li', child: '.sponsored, .promoted, [aria-label="Sponsored"]' },
+    { type: 'has', base: '[role="complementary"]', child: '.adsbygoogle, [data-ad], iframe[src*="googlesyndication"]' },
+    { type: 'has', base: '[role="region"]', child: '.sponsored, .promoted' },
+    { type: 'has', base: '.feed-shared-update-v2', child: '[aria-label="Promoted"], .sponsored-content' },
+    { type: 'has', base: '.ytd-rich-item-renderer', child: 'ytd-ad-slot-renderer, ytd-display-ad-renderer' },
+    { type: 'has', base: 'ytd-rich-item-renderer', child: 'ytd-promoted-sparkles-web-renderer, ytd-promoted-video-renderer' },
+    { type: 'upward', child: '.adsbygoogle', ancestor: 'div, aside, section, article' },
+    { type: 'upward', child: '[data-ad]', ancestor: 'div, aside, section, article' },
+    { type: 'upward', child: '[data-ad-slot]', ancestor: 'div, aside, section, article' },
+    { type: 'upward', child: 'iframe[src*="doubleclick"]', ancestor: 'div, aside, section, article' },
+    { type: 'upward', child: 'iframe[src*="googlesyndication"]', ancestor: 'div, aside, section, article' },
+    { type: 'upward', child: 'iframe[src*="adnxs"]', ancestor: 'div, aside, section, article' },
+    { type: 'upward', child: '[aria-label="Sponsored"]', ancestor: 'article, li, div' },
+    { type: 'upward', child: '.sponsored-content', ancestor: 'article, li, div' },
+    { type: 'upward', child: '.promoted', ancestor: 'article, li, div' },
+    { type: 'upward', child: 'ytd-ad-slot-renderer, ytd-promoted-sparkles-web-renderer', ancestor: 'ytd-rich-item-renderer, div' },
+  ]);
+
+  let mutationObserver = null;
+  const pendingMutationRoots = new Set();
+  let currentPageAllowlisted = false;
+  let mutationFrameId = 0;
+
+  /**
+   * Returns true when the current page is a YouTube surface where only curated
+   * domain-specific cosmetics should run.
+   * @returns {boolean}
+   */
+  function isYouTubeSurface() {
+    const hostname = location.hostname.replace(/^www\./, '').toLowerCase();
+    return hostname === 'youtube.com' || hostname.endsWith('.youtube.com') || hostname === 'youtu.be';
   }
 
-  // ── COSMETIC SELECTORS ─────────────────────────────────────────────────────
-  // Covers AdBlock Tester domains + universal patterns from EasyList cosmetic
-  const COSMETIC_CSS = `
-    /* ── AdBlock Tester specific (boosts test score) ─────────────────── */
-    .adbox, .banner_ads, .adsbox, .textads, .ad-unit, .ad-zone,
-    .ad-container, .ad-wrapper, .ad-slot, .ad-frame, .ad-area,
-    .ad-space, .ad-region, .ad-placeholder, .ad-holder,
-    .ad-outer, .ad-inner, .ad-top, .ad-bottom, .ad-left, .ad-right,
-    .ad-full, .ad-wide, .ad-block, .ad-strip, .ad-row, .ad-col,
-    [class*="google_ads"], [class*="googletag"], [id*="google_ads"],
-    [id*="div-gpt-ad"], [id*="gpt-ad"], [class*="gpt-ad"],
-
-    /* ── Google AdSense ──────────────────────────────────────────────── */
-    ins.adsbygoogle, [data-ad-client], [data-ad-slot],
-    .adsbygoogle, #adsbygoogle, .adsbygoogle-error,
-    [data-adsbygoogle-status], [data-google-query-id],
-
-    /* ── DoubleClick / DFP ───────────────────────────────────────────── */
-    iframe[src*="doubleclick.net"], iframe[src*="googlesyndication.com"],
-    iframe[src*="googleadservices.com"], div[id*="div-gpt"],
-    [id*="dfp-ad"], [class*="dfp-ad"], [id*="dfp_ad"],
-
-    /* ── Common ad wrappers ──────────────────────────────────────────── */
-    #ad, #ads, #advert, #advertisement, #advertising,
-    #ad-top, #ad-bottom, #ad-left, #ad-right, #ad-center,
-    #ad-header, #ad-footer, #ad-sidebar, #ad-banner, #ad-leaderboard,
-    #ad-rectangle, #ad-skyscraper, #ad-interstitial,
-    #ad_top, #ad_bottom, #ad_left, #ad_right, #ad_banner,
-    #adsense, #adsense-top, #adsense-bottom, #adsense-sidebar,
-    #banner_ad, #banner-ad, #bannerAd, #leaderboard, #leaderboard-ad,
-    #rectangle, #rectangle-ad, #skyscraper, #skyscraper-ad,
-    #popup-ad, #popupAd, #floating-ad, #floatingAd,
-    #sticky-ad, #stickyAd, #fixed-ad, #fixedAd,
-    #sponsored, #sponsored-content, #sponsoredContent,
-    #native-ad, #nativeAd, #native_ad,
-    #promo, #promo-ad, #promoAd, #promotion, #promotions,
-    #partner, #partner-ad, #partnerAd, #partners,
-    #affiliate, #affiliate-ad, #affiliateAd,
-
-    /* ── Taboola ─────────────────────────────────────────────────────── */
-    [id^="taboola"], [class^="taboola"], [id*="_taboola"],
-    .trc_rbox, .trc_rbox_div, .trc-content, .trc-widget,
-    div[data-loader="taboola"], iframe[src*="taboola.com"],
-
-    /* ── Outbrain ────────────────────────────────────────────────────── */
-    [id^="outbrain"], [class^="outbrain"], .ob-widget,
-    .ob-widget-section, .OUTBRAIN, div[data-widget-id^="AR_"],
-    iframe[src*="outbrain.com"],
-
-    /* ── Criteo ──────────────────────────────────────────────────────── */
-    [id*="criteo"], [class*="criteo"], iframe[src*="criteo.com"],
-    [data-src*="criteo"], script[src*="criteo"],
-
-    /* ── AppNexus / Xandr ────────────────────────────────────────────── */
-    [id*="apn_ad"], [class*="apn-ad"], iframe[src*="adnxs.com"],
-    div[id^="an_creative"], div[class^="an_creative"],
-
-    /* ── Media.net ───────────────────────────────────────────────────── */
-    [id^="mnative"], [class^="mn-ad"], iframe[src*="media.net"],
-    div[id*="medianed"],
-
-    /* ── Sharethrough ────────────────────────────────────────────────── */
-    [class*="sharethrough"], iframe[src*="sharethrough.com"],
-
-    /* ── Teads ───────────────────────────────────────────────────────── */
-    [class*="teads"], iframe[src*="teads.tv"], [id*="teads"],
-
-    /* ── Push notification prompt overlays ───────────────────────────── */
-    #onesignal-slidedown-container, #onesignal-popover-container,
-    .onesignal-slidedown-container, .onesignal-popover-container,
-    [id*="pushcrew"], [class*="pushcrew"],
-    .gravitec-widget-container, #gravitec-widget,
-    [class*="push-notification"], [id*="push-notification"],
-    [class*="notification-prompt"], [id*="notification-prompt"],
-
-    /* ── Cookie / GDPR banners ───────────────────────────────────────── */
-    #cookie-banner, #cookie-notice, #cookie-consent, #cookie-bar,
-    #gdpr-banner, #gdpr-popup, #gdpr-notice, #gdpr-modal,
-    #consent-banner, #consent-notice, #consent-popup, #consent-modal,
-    .cookie-banner, .cookie-notice, .cookie-consent, .cookie-bar,
-    .gdpr-banner, .gdpr-popup, .consent-banner, .consent-notice,
-    #onetrust-banner-sdk, #onetrust-pc-sdk, #onetrust-consent-sdk,
-    #CybotCookiebotDialog, .cookiebanner, #cookiebanner,
-    #cc-window, .cc-window, .cc-banner, #didomi-popup,
-    #qc-cmp2-ui, [class*="cookie-law"], [id*="cookie-law"],
-    [class*="gdpr-"], [class*="consent-"],
-
-    /* ── Newsletter / exit-intent popups ─────────────────────────────── */
-    [class*="newsletter-popup"], [id*="newsletter-popup"],
-    [class*="subscribe-popup"], [id*="subscribe-popup"],
-    [class*="email-popup"], [id*="email-popup"],
-    [class*="signup-popup"], [id*="signup-popup"],
-    [class*="exit-intent"], [id*="exit-intent"],
-    [class*="exitintent"], [id*="exitintent"],
-    .mc-modal, #mc_embed_popup,
-    [class*="klaviyo-form-overlay"],
-    [class*="popup-overlay"], [class*="modal-overlay"],
-
-    /* ── Floating / sticky ads ───────────────────────────────────────── */
-    [class*="floating-ad"], [id*="floating-ad"],
-    [class*="sticky-ad"], [id*="sticky-ad"],
-    [class*="fixed-bottom-ad"], [class*="fixed-top-ad"],
-    [class*="anchored-ad"], [class*="overlay-ad"],
-    div[style*="position:fixed"][style*="z-index:999"],
-    div[style*="position: fixed"][style*="z-index: 999"],
-
-    /* ── Social promoted content ─────────────────────────────────────── */
-    [data-promoted="true"], [data-ad-preview],
-    [aria-label="Advertisement"], [aria-label="Ads"],
-    [aria-label="Sponsored"], [data-testid="placementTracking"],
-
-    /* ── Video ad overlays ───────────────────────────────────────────── */
-    .ytp-ad-overlay-container, .ytp-ad-overlay-slot,
-    .ytp-ad-text-overlay, .ytp-ad-image-overlay,
-    .ytp-ad-player-overlay, .ytp-ad-player-overlay-instream-info,
-    .ytp-ad-simple-ad-badge, .ytp-ad-preview-container,
-    .ytp-ad-shopping-overlay, .ytp-ad-action-interstitial,
-    #masthead-ad, ytd-banner-promo-renderer, ytd-statement-banner-renderer,
-    ytd-ad-slot-renderer, ytd-in-feed-ad-layout-renderer,
-    ytd-display-ad-renderer, ytd-promoted-sparkles-web-renderer,
-    ytd-promoted-video-renderer, ytd-search-pyv-renderer,
-
-    /* ── AdBlock Tester cosmetic test patterns ───────────────────────── */
-    .ad-banner-top, .ad-banner-bottom, .ad-banner-left, .ad-banner-right,
-    .ad-banner-center, .ad-banner-wrapper, .ad-banner-holder,
-    .advertisement-300x250, .advertisement-728x90, .advertisement-320x50,
-    .advertisement-160x600, .advertisement-300x600,
-    [class*="adBanner"], [class*="adSlot"], [class*="adUnit"],
-    [id*="adBanner"], [id*="adSlot"], [id*="adUnit"],
-
-    /* ── Fallback wildcard patterns ──────────────────────────────────── */
-    [class^="ad-"][class$="-container"],
-    [class^="ad-"][class$="-wrapper"],
-    [id^="ad-"][id$="-container"],
-    [id^="sponsor-"][id$="-block"]
-
-  { display: none !important; visibility: hidden !important; pointer-events: none !important; }
-
-  /* ── Restore scroll locked by popups ──────────────────────────────── */
-  html.overflow-hidden, html[style*="overflow: hidden"],
-  html[style*="overflow:hidden"], body.overflow-hidden,
-  body.modal-open, body.no-scroll, body[style*="overflow: hidden"],
-  body[style*="overflow:hidden"] {
-    overflow: auto !important;
-    position: static !important;
-    height: auto !important;
-  }
-  `;
-
-  function injectCosmetic() {
-    let s = document.getElementById('shieldblock-cosmetic');
-    if (s) return;
-    s = document.createElement('style');
-    s.id = 'shieldblock-cosmetic';
-    s.textContent = COSMETIC_CSS;
-    (document.head || document.documentElement).appendChild(s);
-  }
-
-  function observeDynamic() {
-    // Remove dynamically injected ad iframes
-    const io = new MutationObserver(() => {
-      if (!enabled || allowlisted) return;
-      document.querySelectorAll(
-        'iframe[src*="doubleclick"],iframe[src*="googlesyndication"],iframe[src*="adnxs"]'
-      ).forEach((el) => el.remove());
-
-      // Restore scroll only when the page actually looks locked.
-      const body = document.body;
-      const html = document.documentElement;
-      if (!body) return;
-
-      const bodyStyle = body.style;
-      const htmlStyle = html.style;
-      const bodyClasses = body.classList;
-      const htmlClasses = html.classList;
-      const scrollLocked =
-        bodyStyle.overflow === 'hidden' ||
-        bodyStyle.position === 'fixed' ||
-        htmlStyle.overflow === 'hidden' ||
-        bodyClasses.contains('modal-open') ||
-        bodyClasses.contains('no-scroll') ||
-        bodyClasses.contains('overflow-hidden') ||
-        htmlClasses.contains('modal-open') ||
-        htmlClasses.contains('no-scroll') ||
-        htmlClasses.contains('overflow-hidden');
-
-      if (!scrollLocked) return;
-
-      ['overflow', 'position', 'height', 'top', 'width'].forEach((prop) => {
-        bodyStyle.removeProperty(prop);
-        htmlStyle.removeProperty(prop);
-      });
-    });
-    io.observe(document.documentElement, { childList: true, subtree: true });
-  }
-
-  chrome.runtime.onMessage.addListener((msg) => {
-    if (['TOGGLE_EXTENSION', 'ALLOWLIST_UPDATED'].includes(msg.type)) {
-      refreshState();
+  /**
+   * Returns true when the current hostname is allowlisted.
+   * @returns {Promise<boolean>}
+   */
+  async function loadAllowlistState() {
+    try {
+      const result = await chrome.storage.local.get('allowlistedDomains');
+      const allowlistedDomains = Array.isArray(result.allowlistedDomains)
+        ? result.allowlistedDomains
+        : [];
+      const hostname = location.hostname.replace(/^www\./, '').toLowerCase();
+      currentPageAllowlisted = allowlistedDomains.some((domain) => (
+        hostname === String(domain).replace(/^www\./, '').toLowerCase()
+        || hostname.endsWith(`.${String(domain).replace(/^www\./, '').toLowerCase()}`)
+      ));
+    } catch {
+      currentPageAllowlisted = false;
     }
-  });
 
-  chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName !== 'local') return;
-    if (changes.enabled || changes.allowlist) refreshState();
-  });
+    if (currentPageAllowlisted) {
+      document.documentElement?.setAttribute('data-shieldblock-allowlisted', 'true');
+    }
 
-  refreshState();
-  observeDynamic();
+    return currentPageAllowlisted;
+  }
+
+  /**
+   * Delays initial work briefly when the tab starts hidden.
+   * @returns {Promise<void>}
+   */
+  async function waitForVisibleStart() {
+    if (document.hidden !== true) {
+      return;
+    }
+
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, INITIAL_HIDDEN_DELAY_MS);
+    });
+  }
+
+  /**
+   * Returns true when an element is an ad-bait probe that should remain visible.
+   * @param {Element | null} element
+   * @returns {boolean}
+   */
+  function isBaitElement(element) {
+    if (!(element instanceof Element)) {
+      return false;
+    }
+
+    for (const className of BAIT_CLASS_EXCEPTIONS) {
+      if (element.classList.contains(className)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Appends bait exclusions to a selector string.
+   * @param {string} selector
+   * @returns {string}
+   */
+  function withBaitExclusions(selector) {
+    return `${selector}${BAIT_NOT_SUFFIX}`;
+  }
+
+  /**
+   * Creates or updates a style node in the document.
+   * @param {string} styleId
+   * @param {string} cssText
+   * @returns {HTMLStyleElement | null}
+   */
+  function upsertStyle(styleId, cssText) {
+    const parent = document.head || document.documentElement;
+    if (!parent) {
+      return null;
+    }
+
+    let style = document.getElementById(styleId);
+    if (!(style instanceof HTMLStyleElement)) {
+      style = document.createElement('style');
+      style.id = styleId;
+      style.type = 'text/css';
+      style.textContent = cssText;
+      parent.appendChild(style);
+      return style;
+    }
+
+    if (style.textContent !== cssText) {
+      style.textContent = cssText;
+    }
+
+    if (style.parentNode !== parent) {
+      parent.appendChild(style);
+    }
+
+    return style;
+  }
+
+  /**
+   * Builds a CSS rule string from a selector list.
+   * @param {string[]} selectors
+   * @returns {string}
+   */
+  function buildCssRule(selectors) {
+    if (!selectors.length) {
+      return '';
+    }
+
+    return `${selectors.map(withBaitExclusions).join(', ')} { display: none !important; }`;
+  }
+
+  /**
+   * Injects the global generic cosmetic stylesheet.
+   * @returns {void}
+   */
+  function injectGenericCSS() {
+    if (currentPageAllowlisted || isYouTubeSurface()) {
+      return;
+    }
+    const cssText = buildCssRule(GENERIC_COSMETICS);
+    if (cssText) {
+      upsertStyle(GENERIC_STYLE_ID, cssText);
+    }
+  }
+
+  /**
+   * Looks up the current domain-specific selector set.
+   * @param {string} hostname
+   * @returns {string[]}
+   */
+  function getDomainSelectors(hostname) {
+    if (DOMAIN_COSMETICS[hostname]) {
+      return DOMAIN_COSMETICS[hostname];
+    }
+
+    for (const [domain, selectors] of Object.entries(DOMAIN_COSMETICS)) {
+      if (hostname === domain || hostname.endsWith(`.${domain}`)) {
+        return selectors;
+      }
+    }
+
+    return [];
+  }
+
+  /**
+   * Removes stale per-domain style tags when the current hostname changes.
+   * @param {string} activeStyleId
+   * @returns {void}
+   */
+  function pruneDomainStyles(activeStyleId) {
+    const domainStyles = document.querySelectorAll(`style[id^="${DOMAIN_STYLE_PREFIX}"]`);
+    for (const style of domainStyles) {
+      if (style.id !== activeStyleId) {
+        style.remove();
+      }
+    }
+  }
+
+  /**
+   * Injects domain-specific cosmetic CSS for the current hostname.
+   * @returns {void}
+   */
+  function injectDomainCSS() {
+    if (currentPageAllowlisted) {
+      return;
+    }
+    const hostname = location.hostname.toLowerCase();
+    const selectors = getDomainSelectors(hostname);
+    const styleId = `${DOMAIN_STYLE_PREFIX}${hostname}`;
+    pruneDomainStyles(styleId);
+
+    if (!selectors.length) {
+      const staleStyle = document.getElementById(styleId);
+      if (staleStyle) {
+        staleStyle.remove();
+      }
+      return;
+    }
+
+    const cssText = buildCssRule(selectors);
+    if (cssText) {
+      upsertStyle(styleId, cssText);
+    }
+  }
+
+  /**
+   * Collects scoped matches for a selector from a root element or document.
+   * @param {ParentNode | Element | Document} root
+   * @param {string} selector
+   * @returns {Element[]}
+   */
+  function collectScopedMatches(root, selector) {
+    const matches = [];
+    if (root instanceof Element && root.matches(selector)) {
+      matches.push(root);
+    }
+
+    if ('querySelectorAll' in root) {
+      matches.push(...root.querySelectorAll(selector));
+    }
+
+    return matches;
+  }
+
+  /**
+   * Hides an element with inline styles unless it is a bait probe.
+   * @param {Element | null} element
+   * @returns {void}
+   */
+  function hideElement(element) {
+    if (currentPageAllowlisted || !(element instanceof HTMLElement) || isBaitElement(element)) {
+      return;
+    }
+
+    element.style.setProperty('display', 'none', 'important');
+    element.setAttribute('data-shieldblock-hidden', 'true');
+  }
+
+  /**
+   * Finds parent elements matching a selector that contain an ad child.
+   * @param {string} baseSelector
+   * @param {string} childSelector
+   * @param {ParentNode | Element | Document} root
+   * @returns {void}
+   */
+  function handleHasSelector(baseSelector, childSelector, root) {
+    const baseElements = collectScopedMatches(root, baseSelector);
+    for (const baseElement of baseElements) {
+      if (baseElement.querySelector(childSelector)) {
+        hideElement(baseElement);
+      }
+    }
+  }
+
+  /**
+   * Walks upward from an ad marker to the nearest matching ancestor selector.
+   * @param {string} childSelector
+   * @param {string} ancestorSelector
+   * @param {ParentNode | Element | Document} root
+   * @returns {void}
+   */
+  function handleUpwardSelector(childSelector, ancestorSelector, root) {
+    const childElements = collectScopedMatches(root, childSelector);
+    for (const childElement of childElements) {
+      const ancestor = childElement.closest(ancestorSelector);
+      if (ancestor) {
+        hideElement(ancestor);
+      }
+    }
+  }
+
+  /**
+   * Applies a conservative inline hide pass for high-confidence ad markers.
+   * @param {ParentNode | Element | Document} root
+   * @returns {void}
+   */
+  function hideDirectAdMatches(root) {
+    const matches = collectScopedMatches(root, DIRECT_HIDE_SELECTORS.join(', '));
+    for (const element of matches) {
+      hideElement(element);
+    }
+  }
+
+  /**
+   * Executes the procedural engine against the supplied DOM roots.
+   * @param {Array<ParentNode | Element | Document> | ParentNode | Element | Document} [roots=document]
+   * @returns {void}
+   */
+  function runProceduralRules(roots = document) {
+    if (isYouTubeSurface()) {
+      return;
+    }
+
+    const normalizedRoots = Array.isArray(roots) ? roots : [roots];
+    for (const root of normalizedRoots) {
+      if (!(root instanceof Document) && !(root instanceof Element)) {
+        continue;
+      }
+
+      hideDirectAdMatches(root);
+
+      for (const rule of PROCEDURAL_RULES) {
+        if (rule.type === 'has') {
+          handleHasSelector(rule.base, rule.child, root);
+          continue;
+        }
+
+        handleUpwardSelector(rule.child, rule.ancestor, root);
+      }
+    }
+  }
+
+  /**
+   * Flushes pending mutation roots through the procedural engine.
+   * @returns {void}
+   */
+  function flushPendingMutations() {
+    if (pendingMutationRoots.size === 0) {
+      return;
+    }
+
+    const roots = [...pendingMutationRoots];
+    pendingMutationRoots.clear();
+    injectDomainCSS();
+    runProceduralRules(roots);
+  }
+
+  /**
+   * Schedules mutation processing on the next animation frame.
+   * @returns {void}
+   */
+  function scheduleMutationProcessing() {
+    if (mutationFrameId !== 0) {
+      return;
+    }
+
+    const scheduler = typeof window.requestAnimationFrame === 'function'
+      ? window.requestAnimationFrame.bind(window)
+      : (callback) => window.setTimeout(callback, 16);
+
+    mutationFrameId = scheduler(() => {
+      mutationFrameId = 0;
+      flushPendingMutations();
+    });
+  }
+
+  /**
+   * Starts the mutation observer once the body exists.
+   * @returns {void}
+   */
+  function installMutationObserver() {
+    if (currentPageAllowlisted || mutationObserver) {
+      return;
+    }
+
+    if (!document.body) {
+      window.requestAnimationFrame(installMutationObserver);
+      return;
+    }
+
+    mutationObserver = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (node instanceof Element) {
+            pendingMutationRoots.add(node);
+          } else if (node instanceof Text && node.parentElement) {
+            pendingMutationRoots.add(node.parentElement);
+          }
+        }
+      }
+
+      if (pendingMutationRoots.size > 0) {
+        scheduleMutationProcessing();
+      }
+    });
+
+    mutationObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    });
+
+    globalThis.__sb_cosmeticObserving = true;
+    document.documentElement?.setAttribute(OBSERVER_ATTRIBUTE, 'true');
+  }
+
+  /**
+   * Dispatches the internal navigation event used for SPA refreshes.
+   * @param {string} reason
+   * @returns {void}
+   */
+  function dispatchNavigationEvent(reason) {
+    window.dispatchEvent(new CustomEvent('shieldblock-navigate', {
+      detail: {
+        reason,
+        url: location.href,
+      },
+    }));
+  }
+
+  /**
+   * Wraps history methods to emit a navigation event after SPA transitions.
+   * @param {'pushState' | 'replaceState'} methodName
+   * @returns {void}
+   */
+  function wrapHistoryMethod(methodName) {
+    const original = history[methodName];
+    if (typeof original !== 'function' || original.__shieldblockWrapped === true) {
+      return;
+    }
+
+    const wrapped = function shieldblockWrappedHistory(...args) {
+      const result = Reflect.apply(original, this, args);
+      dispatchNavigationEvent(methodName);
+      return result;
+    };
+
+    wrapped.__shieldblockWrapped = true;
+    try {
+      history[methodName] = wrapped;
+    } catch {
+      // Some pages harden history methods; popstate and native events remain as fallback.
+    }
+  }
+
+  /**
+   * Reapplies cosmetic rules after SPA navigation.
+   * @returns {void}
+   */
+  function rerunAllCosmetics() {
+    injectGenericCSS();
+    injectDomainCSS();
+    runProceduralRules(document);
+  }
+
+  /**
+   * Installs SPA navigation hooks for history and YouTube custom events.
+   * @returns {void}
+   */
+  function installNavigationHooks() {
+    wrapHistoryMethod('pushState');
+    wrapHistoryMethod('replaceState');
+
+    window.addEventListener('shieldblock-navigate', rerunAllCosmetics, { passive: true });
+    window.addEventListener('popstate', rerunAllCosmetics, { passive: true });
+    window.addEventListener('yt-navigate-finish', rerunAllCosmetics, { passive: true });
+  }
+
+  /**
+   * Boots the cosmetic engine.
+   * @returns {void}
+   */
+  async function init() {
+    await waitForVisibleStart();
+    if (await loadAllowlistState()) {
+      return;
+    }
+
+    injectGenericCSS();
+    injectDomainCSS();
+    installMutationObserver();
+    installNavigationHooks();
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', () => {
+        rerunAllCosmetics();
+      }, { once: true });
+      return;
+    }
+
+    rerunAllCosmetics();
+  }
+
+  /**
+   * Aggressively removes companion/display ads that appear INSIDE the video player.
+   * These are overlay cards that appear over the video while it's playing.
+   */
+  function removeCompanionAds() {
+    const COMPANION_SELECTORS = [
+      '.ytp-ce-element',           // Info card overlays on video
+      '.ytp-cards-teaser',          // Card teasers (corner popup)
+      '.ytp-cards-button',
+      '#companion',                 // Right-side companion panel
+      '#companion-slot',
+      '.ytd-companion-slot-renderer',
+      'ytd-companion-slot-renderer',
+      '#panel-pages',               // Panel with display ads
+      '.ytd-action-companion-ad-renderer',
+      'ytd-action-companion-ad-renderer',
+      '.iv-branding',               // In-video branding overlay
+      '.ytp-iv-video-content',
+      '#player-ads',
+      '#masthead-ad',
+      '.ytp-ad-overlay-container',
+      '.ytp-ad-text-overlay',
+    ];
+
+    for (const sel of COMPANION_SELECTORS) {
+      try {
+        document.querySelectorAll(sel).forEach(el => {
+          if (el instanceof HTMLElement) {
+            el.style.setProperty('display', 'none', 'important');
+            el.setAttribute('data-sb-hidden', '1');
+          }
+        });
+      } catch { /* ignore bad selectors */ }
+    }
+  }
+
+  // Run companion ad removal on YouTube pages via a fast interval
+  if (isYouTubeSurface()) {
+    // Initial run
+    setTimeout(removeCompanionAds, 500);
+    setTimeout(removeCompanionAds, 1500);
+    setTimeout(removeCompanionAds, 3000);
+
+    // Watch for dynamically injected companion ads
+    const companionObserver = new MutationObserver(() => {
+      removeCompanionAds();
+    });
+
+    const startCompanionObserver = () => {
+      const target = document.getElementById('player') || document.body;
+      if (target) {
+        companionObserver.observe(target, { childList: true, subtree: true });
+      }
+    };
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', startCompanionObserver, { once: true });
+    } else {
+      startCompanionObserver();
+    }
+
+    // Also re-run on YouTube navigation
+    window.addEventListener('yt-navigate-finish', () => {
+      removeCompanionAds();
+      setTimeout(removeCompanionAds, 800);
+    }, { passive: true });
+  }
+
+  void init();
 })();

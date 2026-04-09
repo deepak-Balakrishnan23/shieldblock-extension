@@ -1,45 +1,82 @@
 {
   "manifest_version": 3,
-  "name": "ShieldBlock AI \u2013 Ad Blocker",
-  "version": "2.5.0",
-  "description": "Adaptive AI ad blocker with imported filter lists, domain-smart learning, cosmetic filters, and phishing guard.",
+  "name": "ShieldBlock AI",
+  "version": "3.0.0",
+  "description": "Advanced ad blocking with AI-powered detection. Blocks ads, trackers, and annoyances with zero data collection.",
+  "minimum_chrome_version": "111",
   "permissions": [
     "declarativeNetRequest",
     "storage",
-    "tabs",
-    "activeTab"
+    "alarms",
+    "tabs"
   ],
   "host_permissions": [
-    "*://*.youtube.com/*",
-    "*://*.facebook.com/*",
-    "*://*.instagram.com/*",
-    "*://*.linkedin.com/*",
-    "*://*.twitter.com/*",
-    "*://*.x.com/*",
-    "*://*/*"
+    "<all_urls>"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
+  "options_page": "options.html",
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
   },
-  "icons": {
-    "16": "icons/icon16.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
-  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "scriptlets/google-tag.js",
+        "scriptlets/no-sourcepoint.js",
+        "scriptlets/no-admiral.js",
+        "scriptlets/no-confiant.js",
+        "scriptlets/prevent-setTimeout.js",
+        "scriptlets/prevent-addEventListener.js",
+        "scriptlets/set-constant.js",
+        "scriptlets/abort-on-property-read.js",
+        "scriptlets/no-xhr-if.js",
+        "scriptlets/no-fetch-if.js",
+        "scriptlets/yt-player.js",
+        "scriptlets/index.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "cosmetic.js",
+        "content.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "ml-classifier.js",
+        "heuristic.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [],
   "declarative_net_request": {
     "rule_resources": [
       {
-        "id": "ads",
+        "id": "ads-core",
         "enabled": true,
-        "path": "rules/ads.json"
+        "path": "rules/ads-core.json"
       },
       {
         "id": "trackers",
@@ -47,61 +84,21 @@
         "path": "rules/trackers.json"
       },
       {
-        "id": "patterns",
+        "id": "annoyances",
         "enabled": true,
-        "path": "rules/patterns.json"
-      },
-      {
-        "id": "popups",
-        "enabled": true,
-        "path": "rules/popups.json"
+        "path": "rules/annoyances.json"
       },
       {
         "id": "youtube",
         "enabled": true,
-        "path": "rules/youtube.json"
-      },
-      {
-        "id": "malware",
-        "enabled": true,
-        "path": "rules/malware.json"
+        "path": "rules/youtube-network.json"
       }
     ]
   },
-  "content_scripts": [
-    {
-      "matches": [
-        "*://*/*"
-      ],
-      "js": [
-        "content.js",
-        "cosmetic.js",
-        "ai-heuristic.js",
-        "ai-ml.js",
-        "ai-phishing.js",
-        "annoyances.js"
-      ],
-      "run_at": "document_start"
-    },
-    {
-      "matches": [
-        "*://*.youtube.com/*"
-      ],
-      "js": [
-        "youtube.js"
-      ],
-      "run_at": "document_start"
-    }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": [
-        "model/ad_classifier.json",
-        "youtube-hook.js"
-      ],
-      "matches": [
-        "*://*/*"
-      ]
-    }
-  ]
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
 }

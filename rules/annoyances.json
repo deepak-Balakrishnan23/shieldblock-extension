@@ -1,0 +1,122 @@
+[
+  {
+    "id": 1,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||cookiebot.com^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 2,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||consent.cookiebot.com^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 3,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||consentcdn.cookiebot.com^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 4,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||consent.cookiebot.eu^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 5,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||onetrust.com^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 6,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||cdn.cookielaw.org^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 7,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||optanon.blob.core.windows.net^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 8,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||geolocation.onetrust.com^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 9,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||privacyportal.onetrust.com^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 10,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||cookielaw.org^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 11,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||trustarc.com^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 12,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||consent.trustarc.com^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 13,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||preferences-mgr.trustarc.com^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 14,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||truste.com^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 15,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||cookiepro.com^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 16,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||cdn.cookielaw.org/consent^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 17,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||geolocation.cookiepro.com^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 18,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||cookie-cdn.cookiepro.com^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 19,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||cmp-cdn.cookiepro.com^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  },
+  {
+    "id": 20,
+    "priority": 100,
+    "action": { "type": "block" },
+    "condition": { "urlFilter": "||cookiepro.blob.core.windows.net^", "resourceTypes": ["script", "image", "xmlhttprequest", "sub_frame"] }
+  }
+]

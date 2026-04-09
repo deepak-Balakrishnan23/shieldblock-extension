@@ -1,50 +1,64 @@
-# ShieldBlock Privacy Policy
+# ShieldBlock AI Privacy Policy
 
-Effective date: March 30, 2026
+ShieldBlock AI does not collect, sell, transfer, or monetize personal data.
 
-ShieldBlock is a Manifest V3 browser extension that blocks ads and trackers, removes intrusive page elements, learns site-specific cosmetic rules, and shows on-device phishing warnings.
+## What ShieldBlock AI Processes
 
-## What ShieldBlock accesses
+ShieldBlock AI processes page content, network metadata, and user-created settings locally inside Chrome so it can block ads, trackers, annoyances, and sponsored content.
 
-ShieldBlock processes the following information locally on the user's device:
+All detection and blocking logic runs on-device. This includes:
 
-- Website URLs and hostnames
-- Page structure and visible page elements
-- Extension settings and toggle preferences
-- Allowlist entries
-- User-created site rules created with "Teach This Site"
-- Local counters and recent activity items
+- declarative network request rules
+- cosmetic filtering
+- heuristic scoring
+- machine-learning classification
+- custom rules and allowlists
+- local usage counters
 
-## What ShieldBlock stores
+## What ShieldBlock AI Does Not Collect
 
-ShieldBlock stores data locally using Chrome extension storage:
+ShieldBlock AI does not collect:
 
-- Blocking settings
-- Allowlist entries
-- On-device counters
-- Site-specific learned rules
-- Adaptive site profiles
-- Recent extension activity summaries
+- browsing history for remote storage
+- page content for remote storage
+- account information
+- email addresses
+- passwords
+- form entries
+- personal identifiers
+- full request URLs in extension storage
 
-## What ShieldBlock does not do
+## Network Requests
 
-ShieldBlock does not:
+ShieldBlock AI does not send browsing data to external servers.
 
-- Sell user data
-- Use user data for advertising
-- Send browsing history or page contents to a remote server
-- Run remote-hosted executable code
-- Share personal data with data brokers
+The extension only makes outbound requests to download public filter lists used for blocking:
 
-## Why access is required
+- `https://easylist.to/easylist/easylist.txt`
+- `https://easylist.to/easylist/easyprivacy.txt`
+- `https://ublockorigin.github.io/uAssetsCDN/filters/filters.min.txt`
+- `https://filters.adtidy.org/extension/chromium/filters/2.txt`
 
-ShieldBlock requests access to websites so it can:
+These requests are made by the background service worker on install and periodic refresh. No page data or user identifiers are attached intentionally by ShieldBlock AI.
 
-- Apply ad and tracker blocking logic
-- Hide intrusive overlays and annoyance elements
-- Learn site-specific cosmetic fixes when the user requests them
-- Evaluate suspicious URLs locally for phishing risk
+## Storage
+
+ShieldBlock AI stores settings locally using `chrome.storage.local`.
+
+Stored data is limited to:
+
+- enabled or disabled state
+- rule counts and refresh timestamps
+- filter list status
+- allowlisted domains
+- custom network and cosmetic rules
+- debug flag
+- local subsystem counters
+
+## Data Sharing
+
+ShieldBlock AI does not sell data, rent data, or share data with advertisers, analytics vendors, or data brokers.
 
 ## Contact
 
-If published, replace this section with your support email or website.
+For privacy questions, contact: `privacy@shieldblock.example`

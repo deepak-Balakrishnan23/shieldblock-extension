@@ -1,240 +1,156 @@
-// ShieldBlock AI — Popup v2.4
-
-const $ = (id) => document.getElementById(id);
-const pwr = $('pwr');
-const sbar = $('sbar');
-const stxt = $('stxt');
-const tot = $('tot');
-const cAds = $('cAds');
-const cTrk = $('cTrk');
-const cSess = $('cSess');
-const cAI = $('cAI');
-const cML = $('cML');
-const cPh = $('cPh');
-const hSlider = $('hSlider');
-const hVal = $('hVal');
-const mSlider = $('mSlider');
-const mVal = $('mVal');
-const pickBtn = $('pickBtn');
-const clrRules = $('clrRules');
-const rulesList = $('rulesList');
-const tAds = $('tAds');
-const tTrk = $('tTrk');
-const tPat = $('tPat');
-const tPop = $('tPop');
-const tYT = $('tYT');
-const tMal = $('tMal');
-const tAI = $('tAI');
-const tML = $('tML');
-const tPh = $('tPh');
-const tCk = $('tCk');
-const alInput = $('alInput');
-const alAdd = $('alAdd');
-const alList = $('alList');
-const rstBtn = $('rstBtn');
-const siteTitle = $('siteTitle');
-const siteStatus = $('siteStatus');
-const siteScore = $('siteScore');
-const activityList = $('activityList');
-
-const RULE_COUNTS = {
-  ads: 12000,
-  trackers: 9000,
-  patterns: 8000,
-  popups: 1226,
-  youtube: 10,
-  malware: 48,
+const elements = {
+  statusBadge: document.getElementById('status-badge'),
+  statusText: document.getElementById('status-text'),
+  toggleCopy: document.getElementById('toggle-copy'),
+  masterToggle: document.getElementById('master-toggle'),
+  adsCount: document.getElementById('ads-count'),
+  trackersCount: document.getElementById('trackers-count'),
+  cosmeticCount: document.getElementById('cosmetic-count'),
+  heuristicCount: document.getElementById('heuristic-count'),
+  mlCount: document.getElementById('ml-count'),
+  phishingCount: document.getElementById('phishing-count'),
+  refreshLists: document.getElementById('refresh-lists'),
+  currentDomain: document.getElementById('current-domain'),
+  allowlistButton: document.getElementById('allowlist-button'),
+  openOptions: document.getElementById('open-options'),
 };
 
-document.querySelectorAll('.tab').forEach((tab) => {
-  tab.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach((el) => el.classList.remove('on'));
-    document.querySelectorAll('.panel').forEach((panel) => panel.classList.remove('on'));
-    tab.classList.add('on');
-    $(`panel-${tab.dataset.t}`).classList.add('on');
-  });
-});
+let refreshTimer = 0;
+let currentStats = {
+  enabled: true,
+  currentDomain: '',
+  isCurrentSiteAllowlisted: false,
+};
 
-function anim(el, target) {
-  const current = parseInt(el.textContent.replace(/,/g, ''), 10) || 0;
-  if (current === target) return;
-  const diff = target - current;
-  const step = Math.sign(diff) * Math.max(1, Math.ceil(Math.abs(diff) / 20));
-  let value = current;
-  const interval = setInterval(() => {
-    value += step;
-    if ((step > 0 && value >= target) || (step < 0 && value <= target)) {
-      value = target;
-      clearInterval(interval);
-    }
-    el.textContent = value.toLocaleString();
-  }, 16);
+function formatCount(value) {
+  return new Intl.NumberFormat().format(Number(value || 0));
 }
 
-function setEnabled(on) {
-  pwr.classList.toggle('on', on);
-  sbar.classList.toggle('off', !on);
-  stxt.textContent = on ? 'Adaptive Protection Active' : 'Protection Paused';
-  document.body.classList.toggle('off', !on);
+async function getActiveTabId() {
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tabs[0]?.id ?? 0;
 }
 
-function renderRules(customRulesByDomain = {}) {
-  const entries = Object.entries(customRulesByDomain)
-    .flatMap(([domain, rules]) => (rules || []).map((rule) => ({ domain, rule })));
-
-  rulesList.innerHTML = entries.length
-    ? entries.slice(0, 24).map(({ domain, rule }) => `<div class="ritem">${domain} -> ${rule}</div>`).join('')
-    : '<div class="empty">No smart rules yet. Use "Report Missed Ad" to teach ShieldBlock.</div>';
+function setRefreshLoading(loading) {
+  if (!elements.refreshLists) return;
+  elements.refreshLists.disabled = loading;
+  elements.refreshLists.textContent = loading ? '…' : '↻';
 }
 
-function renderAllowlist(list) {
-  alList.innerHTML = list?.length
-    ? list.map((domain) => `
-      <div class="alitem">
-        <span class="aldomain">${domain}</span>
-        <button class="alrm" data-d="${domain}" title="Remove">x</button>
-      </div>`).join('')
-    : '<div class="empty">No allowed sites. All sites are protected.</div>';
+function renderStats(stats) {
+  currentStats = { ...currentStats, ...stats };
 
-  alList.querySelectorAll('.alrm').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      chrome.runtime.sendMessage({ type: 'REMOVE_FROM_ALLOWLIST', domain: btn.dataset.d }, () => loadAll());
-    });
-  });
-}
+  const enabled = stats.enabled !== false;
+  const currentDomain = stats.currentDomain || '';
+  const allowlisted = stats.isCurrentSiteAllowlisted === true;
 
-function renderActivities(items = []) {
-  activityList.innerHTML = items.length
-    ? items.slice(0, 8).map((item) => `
-      <div class="aitem">
-        <div class="atitle">${item.title}</div>
-        <div class="adetail">${item.detail || ''}</div>
-      </div>`).join('')
-    : '<div class="empty">No recent activity yet.</div>';
-}
-
-function renderSiteInsight(tabInfo) {
-  if (!tabInfo?.summary) {
-    siteTitle.textContent = 'Current Site Insight';
-    siteStatus.textContent = 'Open a normal web page to see local ad-pressure and blocking signals.';
-    siteScore.textContent = '--';
-    return;
+  if (elements.statusBadge) elements.statusBadge.dataset.on = String(enabled);
+  if (elements.statusText) elements.statusText.textContent = enabled ? 'Enabled' : 'Disabled';
+  if (elements.masterToggle) elements.masterToggle.checked = enabled;
+  if (elements.toggleCopy) {
+    elements.toggleCopy.textContent = enabled
+      ? 'All protection layers are active.'
+      : 'ShieldBlock AI is paused.';
   }
 
-  const { summary } = tabInfo;
-  siteTitle.textContent = summary.hostname || 'Current Site Insight';
-  siteStatus.textContent = `${summary.status}. Heuristic: ${summary.heuristicBlocked}, ML: ${summary.mlBlocked}, signals: ${summary.candidateSignals}.`;
-  siteScore.textContent = `${summary.intrusionScore}/100`;
+  if (elements.adsCount) elements.adsCount.textContent = formatCount(stats.blockedCount);
+  if (elements.trackersCount) elements.trackersCount.textContent = formatCount(stats.trackerCount);
+  if (elements.cosmeticCount) elements.cosmeticCount.textContent = formatCount(stats.cosmeticCount);
+  if (elements.heuristicCount) elements.heuristicCount.textContent = formatCount(stats.heuristicCount);
+  if (elements.mlCount) elements.mlCount.textContent = formatCount(stats.mlCount);
+  if (elements.phishingCount) elements.phishingCount.textContent = formatCount(stats.phishingCount);
+
+  if (elements.currentDomain) elements.currentDomain.textContent = currentDomain || 'No active site';
+  if (elements.allowlistButton) {
+    elements.allowlistButton.disabled = !currentDomain;
+    elements.allowlistButton.textContent = allowlisted ? 'Remove' : 'Allowlist';
+    elements.allowlistButton.dataset.mode = allowlisted ? 'remove' : 'allow';
+  }
 }
 
-function getEnabledRuleCount(data) {
-  if (data.enabled === false) return 0;
-  return Object.entries(RULE_COUNTS).reduce((sum, [id, count]) => (
-    data[`${id}Enabled`] === false ? sum : sum + count
-  ), 0);
-}
-
-function loadAll() {
-  chrome.runtime.sendMessage({ type: 'GET_STATS' }, (data) => {
-    if (!data) return;
-
-    setEnabled(data.enabled !== false);
-    anim(tot, data.totalBlocked || 0);
-    anim(cAds, data.adsBlocked || 0);
-    anim(cTrk, data.trackersBlocked || 0);
-    anim(cSess, data.sessionBlocked || 0);
-    anim(cAI, data.aiBlocked || 0);
-    anim(cML, data.mlBlocked || 0);
-    anim(cPh, data.phishingDetected || 0);
-
-    tAds.checked = data.adsEnabled !== false;
-    tTrk.checked = data.trackersEnabled !== false;
-    tPat.checked = data.patternsEnabled !== false;
-    tPop.checked = data.popupsEnabled !== false;
-    tYT.checked = data.youtubeEnabled !== false;
-    tMal.checked = data.malwareEnabled !== false;
-    tAI.checked = data.aiEnabled !== false;
-    tML.checked = data.mlEnabled !== false;
-    tPh.checked = data.phishingEnabled !== false;
-    tCk.checked = data.annoyancesEnabled !== false;
-
-    const heuristicThreshold = data.aiThreshold || 72;
-    hSlider.value = heuristicThreshold;
-    hVal.textContent = heuristicThreshold;
-
-    const mlThreshold = data.mlThreshold || 88;
-    mSlider.value = mlThreshold;
-    mVal.textContent = `${mlThreshold}%`;
-
-    renderRules(data.customRulesByDomain || {});
-    renderAllowlist(data.allowlist || []);
-    renderActivities(data.lastActivities || []);
-  });
-
-  chrome.runtime.sendMessage({ type: 'GET_ACTIVE_TAB_INFO' }, (tabInfo) => {
-    renderSiteInsight(tabInfo);
-  });
-}
-
-loadAll();
-
-pwr.addEventListener('click', () => {
-  const on = !pwr.classList.contains('on');
-  setEnabled(on);
-  chrome.runtime.sendMessage({ type: 'TOGGLE_EXTENSION', enabled: on }, () => loadAll());
-});
-
-[['tAds', 'ads'], ['tTrk', 'trackers'], ['tPat', 'patterns'], ['tPop', 'popups'], ['tYT', 'youtube'], ['tMal', 'malware']]
-  .forEach(([id, category]) => {
-    $(id).addEventListener('change', (event) => {
-      chrome.runtime.sendMessage({ type: 'TOGGLE_CATEGORY', category, enabled: event.target.checked }, () => loadAll());
+async function loadStats() {
+  try {
+    const stats = await chrome.runtime.sendMessage({ action: 'getStats' });
+    renderStats(stats ?? {});
+  } catch {
+    renderStats({
+      enabled: false,
+      currentDomain: '',
+      blockedCount: 0,
+      trackerCount: 0,
+      cosmeticCount: 0,
+      heuristicCount: 0,
+      mlCount: 0,
+      phishingCount: 0,
+      isCurrentSiteAllowlisted: false,
     });
-  });
+    if (elements.statusText) elements.statusText.textContent = 'Unavailable';
+    if (elements.toggleCopy) elements.toggleCopy.textContent = 'Unable to reach service worker.';
+  }
+}
 
-tAI.addEventListener('change', (event) => chrome.runtime.sendMessage({ type: 'TOGGLE_AI', enabled: event.target.checked }, () => loadAll()));
-tML.addEventListener('change', (event) => chrome.runtime.sendMessage({ type: 'TOGGLE_ML', enabled: event.target.checked }, () => loadAll()));
-tPh.addEventListener('change', (event) => chrome.runtime.sendMessage({ type: 'TOGGLE_PHISHING', enabled: event.target.checked }, () => loadAll()));
-tCk.addEventListener('change', (event) => chrome.runtime.sendMessage({ type: 'TOGGLE_ANNOYANCES', enabled: event.target.checked }, () => loadAll()));
+async function handleToggleChange() {
+  if (!elements.masterToggle) return;
+  try {
+    const stats = await chrome.runtime.sendMessage({
+      action: 'toggle',
+      enabled: elements.masterToggle.checked,
+    });
+    renderStats(stats ?? {});
+  } catch {
+    elements.masterToggle.checked = !elements.masterToggle.checked;
+    await loadStats();
+  }
+}
 
-hSlider.addEventListener('input', () => {
-  const value = parseInt(hSlider.value, 10);
-  hVal.textContent = value;
-  chrome.runtime.sendMessage({ type: 'UPDATE_SETTING', key: 'aiThreshold', value });
+async function handleRefreshLists() {
+  setRefreshLoading(true);
+  try {
+    const stats = await chrome.runtime.sendMessage({ action: 'refreshLists' });
+    renderStats(stats ?? {});
+  } catch {
+    await loadStats();
+  } finally {
+    setRefreshLoading(false);
+  }
+}
+
+async function handleAllowlistToggle() {
+  if (!currentStats.currentDomain) return;
+  const action = currentStats.isCurrentSiteAllowlisted
+    ? 'removeAllowlistDomain'
+    : 'allowlistDomain';
+  try {
+    const stats = await chrome.runtime.sendMessage({ action, domain: currentStats.currentDomain });
+    renderStats(stats ?? {});
+    const tabId = await getActiveTabId();
+    if (tabId) await chrome.tabs.reload(tabId);
+  } catch {
+    await loadStats();
+  }
+}
+
+function startPolling() {
+  refreshTimer = window.setInterval(() => { void loadStats(); }, 2000);
+}
+
+// Attach listeners only if elements exist
+if (elements.masterToggle) {
+  elements.masterToggle.addEventListener('change', () => { void handleToggleChange(); });
+}
+if (elements.refreshLists) {
+  elements.refreshLists.addEventListener('click', () => { void handleRefreshLists(); });
+}
+if (elements.allowlistButton) {
+  elements.allowlistButton.addEventListener('click', () => { void handleAllowlistToggle(); });
+}
+if (elements.openOptions) {
+  elements.openOptions.addEventListener('click', () => { void chrome.runtime.openOptionsPage(); });
+}
+
+window.addEventListener('unload', () => {
+  if (refreshTimer) window.clearInterval(refreshTimer);
 });
 
-mSlider.addEventListener('input', () => {
-  const value = parseInt(mSlider.value, 10);
-  mVal.textContent = `${value}%`;
-  chrome.runtime.sendMessage({ type: 'UPDATE_SETTING', key: 'mlThreshold', value });
-});
-
-pickBtn.addEventListener('click', () => {
-  chrome.runtime.sendMessage({ type: 'ACTIVATE_PICKER' });
-  window.close();
-});
-
-clrRules.addEventListener('click', () => {
-  chrome.runtime.sendMessage({ type: 'CLEAR_CUSTOM_RULES' }, () => renderRules({}));
-});
-
-alAdd.addEventListener('click', () => {
-  let domain = alInput.value.trim().toLowerCase();
-  if (!domain) return;
-  domain = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
-  if (!domain.includes('.')) return;
-  chrome.runtime.sendMessage({ type: 'ADD_TO_ALLOWLIST', domain }, () => {
-    alInput.value = '';
-    loadAll();
-  });
-});
-
-alInput.addEventListener('keydown', (event) => {
-  if (event.key === 'Enter') alAdd.click();
-});
-
-rstBtn.addEventListener('click', () => {
-  chrome.runtime.sendMessage({ type: 'RESET_STATS' }, () => {
-    [tot, cAds, cTrk, cAI, cML, cPh, cSess].forEach((el) => anim(el, 0));
-    loadAll();
-  });
-});
+void loadStats();
+startPolling();

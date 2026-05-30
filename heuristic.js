@@ -72,6 +72,25 @@
   let videoRects = [];
   let currentPageAllowlisted = false;
   let scheduleFlush = () => {};
+  let mlRequested = false;
+
+  /**
+   * Asks the background worker to inject the ML classifier into this frame.
+   * The 91 KB model is loaded lazily — only the first time a borderline element
+   * appears — so pages that never need it don't pay the parse/memory cost.
+   * @returns {void}
+   */
+  function requestMlClassifier() {
+    if (mlRequested || typeof globalThis.__sb_classify === 'function') {
+      return;
+    }
+    mlRequested = true;
+    try {
+      chrome.runtime.sendMessage({ action: 'loadMlClassifier' });
+    } catch {
+      // Service worker unavailable; heuristic scoring still applies.
+    }
+  }
 
   /**
    * Returns true when the current hostname is allowlisted.
@@ -725,16 +744,21 @@
         continue;
       }
 
-      if (result.score >= 40 && typeof globalThis.__sb_classify === 'function') {
-        let probability = 0;
-        try {
-          probability = Number(globalThis.__sb_classify(element, result.score));
-        } catch {
-          probability = 0;
-        }
+      if (result.score >= 40) {
+        if (typeof globalThis.__sb_classify === 'function') {
+          let probability = 0;
+          try {
+            probability = Number(globalThis.__sb_classify(element, result.score));
+          } catch {
+            probability = 0;
+          }
 
-        if (probability > 0.65) {
-          hideElement(element, 'ml');
+          if (probability > 0.65) {
+            hideElement(element, 'ml');
+          }
+        } else {
+          // Borderline element but the model isn't loaded yet — fetch it.
+          requestMlClassifier();
         }
       }
     }
@@ -848,6 +872,19 @@
     }
 
     globalThis.addEventListener('yt-navigate-finish', handleNavigation, { passive: true });
+
+    // When the lazily-injected ML model becomes available, re-scan so the
+    // borderline elements that triggered the request get classified.
+    try {
+      chrome.runtime.onMessage.addListener((message) => {
+        if (message?.action === 'mlReady') {
+          processedElements = new WeakSet();
+          scanDOM();
+        }
+      });
+    } catch {
+      // Messaging unavailable; heuristic scoring still applies.
+    }
   }
 
   void init();

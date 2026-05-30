@@ -4,7 +4,7 @@ import {
   parseFilterList,
 } from './filter-compiler.js';
 
-const STATIC_RULESET_IDS = ['ads-core', 'trackers', 'annoyances', 'youtube'];
+const STATIC_RULESET_IDS = ['ads-core', 'trackers', 'annoyances', 'youtube', 'security'];
 const FILTER_UPDATE_ALARM = 'filterUpdate';
 const FETCH_TIMEOUT_MS = 20000;
 const FILTER_PARSE_CHUNK_SIZE = 4000;
@@ -75,6 +75,7 @@ const STORAGE_DEFAULTS = {
   filterListStatus: [],
   filterListConfig: { ...DEFAULT_FILTER_LIST_CONFIG },
   debug: false,
+  sponsorBlockEnabled: true,
   blockedCount: 0,
   adsBlocked: 0,
   trackersBlocked: 0,
@@ -82,6 +83,7 @@ const STORAGE_DEFAULTS = {
   heuristicBlocked: 0,
   mlBlocked: 0,
   phishingBlocked: 0,
+  dailyStats: { day: '', ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, ml: 0, phishing: 0 },
   'compiledRules_ads-core': [],
   'compiledRules_trackers': [],
   customDynamicRules: [],
@@ -90,6 +92,53 @@ const STORAGE_DEFAULTS = {
   allowlistedDomains: [],
   allowlistRules: [],
 };
+const DAILY_STAT_KEYS = Object.freeze({
+  adsBlocked: 'ads',
+  trackersBlocked: 'trackers',
+  cosmeticBlocked: 'cosmetic',
+  heuristicBlocked: 'heuristic',
+  mlBlocked: 'ml',
+  phishingBlocked: 'phishing',
+});
+const DAILY_STAT_FIELDS = Object.freeze(['ads', 'trackers', 'cosmetic', 'heuristic', 'ml', 'phishing']);
+
+/**
+ * Returns today's date as a stable YYYY-MM-DD key (UTC).
+ * @returns {string}
+ */
+function currentDayString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/**
+ * Sanitizes a persisted daily-stats record.
+ * @param {unknown} value
+ * @returns {{ day: string, ads: number, trackers: number, cosmetic: number, heuristic: number, ml: number, phishing: number }}
+ */
+function sanitizeDailyStats(value) {
+  const result = { day: '', ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, ml: 0, phishing: 0 };
+  if (value && typeof value === 'object') {
+    result.day = typeof value.day === 'string' ? value.day : '';
+    for (const field of DAILY_STAT_FIELDS) {
+      result[field] = Number.isFinite(value[field]) ? value[field] : 0;
+    }
+  }
+  return result;
+}
+
+/**
+ * Returns the daily-stats record for the current day, resetting it when the
+ * stored record is from a previous day.
+ * @param {{ day: string }} dailyStats
+ * @returns {{ day: string, ads: number, trackers: number, cosmetic: number, heuristic: number, ml: number, phishing: number }}
+ */
+function resolveTodayStats(dailyStats) {
+  const today = currentDayString();
+  if (dailyStats && dailyStats.day === today) {
+    return dailyStats;
+  }
+  return { day: today, ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, ml: 0, phishing: 0 };
+}
 
 /**
  * Lightweight background logger with debug gating for verbose output.
@@ -231,6 +280,7 @@ async function getState() {
     filterListStatus: Array.isArray(stored.filterListStatus) ? stored.filterListStatus : [],
     filterListConfig: sanitizeFilterListConfig(stored.filterListConfig),
     debug: stored.debug === true,
+    sponsorBlockEnabled: stored.sponsorBlockEnabled !== false,
     blockedCount: Number.isFinite(stored.blockedCount) ? stored.blockedCount : 0,
     adsBlocked: Number.isFinite(stored.adsBlocked) ? stored.adsBlocked : 0,
     trackersBlocked: Number.isFinite(stored.trackersBlocked) ? stored.trackersBlocked : 0,
@@ -238,6 +288,7 @@ async function getState() {
     heuristicBlocked: Number.isFinite(stored.heuristicBlocked) ? stored.heuristicBlocked : 0,
     mlBlocked: Number.isFinite(stored.mlBlocked) ? stored.mlBlocked : 0,
     phishingBlocked: Number.isFinite(stored.phishingBlocked) ? stored.phishingBlocked : 0,
+    dailyStats: sanitizeDailyStats(stored.dailyStats),
     'compiledRules_ads-core': sanitizeRuleArray(stored['compiledRules_ads-core']),
     'compiledRules_trackers': sanitizeRuleArray(stored['compiledRules_trackers']),
     customDynamicRules: sanitizeRuleArray(stored.customDynamicRules),
@@ -604,6 +655,7 @@ async function broadcastPageRuleRefresh() {
 async function buildStatsResponse() {
   const state = await getState();
   const currentDomain = await resolveCurrentDomain();
+  const today = resolveTodayStats(state.dailyStats);
   return {
     enabled: state.enabled,
     blockedCount: state.blockedCount,
@@ -612,6 +664,12 @@ async function buildStatsResponse() {
     heuristicCount: state.heuristicBlocked,
     mlCount: state.mlBlocked,
     phishingCount: state.phishingBlocked,
+    todayAds: today.ads,
+    todayTrackers: today.trackers,
+    todayCosmetic: today.cosmetic,
+    todayHeuristic: today.heuristic,
+    todayMl: today.ml,
+    todayPhishing: today.phishing,
     ruleCount: state.ruleCount,
     lastUpdated: state.lastUpdated,
     currentDomain,
@@ -635,6 +693,7 @@ async function buildSettingsResponse() {
     filterListConfig: state.filterListConfig,
     customRulesText: state.customRuleLines.join('\n'),
     allowlistedDomains: state.allowlistedDomains,
+    sponsorBlockEnabled: state.sponsorBlockEnabled,
   };
 }
 
@@ -888,6 +947,12 @@ async function incrementStat(stat) {
     payload.blockedCount = nextValue;
   }
 
+  const dailyField = DAILY_STAT_KEYS[key];
+  if (dailyField) {
+    const today = resolveTodayStats(state.dailyStats);
+    payload.dailyStats = { ...today, [dailyField]: (today[dailyField] || 0) + 1 };
+  }
+
   await chrome.storage.local.set(payload);
   return { ok: true, value: nextValue };
 }
@@ -899,6 +964,7 @@ async function incrementStat(stat) {
 async function resetStats() {
   const payload = {
     blockedCount: 0,
+    dailyStats: { day: currentDayString(), ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, ml: 0, phishing: 0 },
   };
   for (const key of COUNTER_STORAGE_KEYS) {
     payload[key] = 0;
@@ -941,6 +1007,18 @@ async function setDebugMode(enabled) {
 }
 
 /**
+ * Enables or disables the SponsorBlock segment-skipping feature.
+ * @param {boolean} enabled
+ * @returns {Promise<object>}
+ */
+async function setSponsorBlock(enabled) {
+  await chrome.storage.local.set({
+    sponsorBlockEnabled: Boolean(enabled),
+  });
+  return buildSettingsResponse();
+}
+
+/**
  * Imports a JSON settings payload and rebuilds derived state.
  * @param {Record<string, unknown>} payload
  * @returns {Promise<object>}
@@ -964,6 +1042,7 @@ async function importSettings(payload) {
     filterListStatus: currentState.filterListStatus,
     filterListConfig: sanitizeFilterListConfig(payload?.filterListConfig ?? currentState.filterListConfig),
     debug: payload?.debug === true,
+    sponsorBlockEnabled: payload?.sponsorBlockEnabled !== false,
     blockedCount: Number.isFinite(payload?.blockedCount) ? payload.blockedCount : (Number.isFinite(payload?.adsBlocked) ? payload.adsBlocked : 0),
     adsBlocked: Number.isFinite(payload?.adsBlocked) ? payload.adsBlocked : 0,
     trackersBlocked: Number.isFinite(payload?.trackersBlocked) ? payload.trackersBlocked : 0,
@@ -1070,9 +1149,27 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   void (async () => {
     try {
+      if (message?.action === 'loadMlClassifier') {
+        const tabId = sender?.tab?.id;
+        const frameId = typeof sender?.frameId === 'number' ? sender.frameId : 0;
+        if (typeof tabId === 'number') {
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId, frameIds: [frameId] },
+              files: ['ml-classifier.js'],
+            });
+            await chrome.tabs.sendMessage(tabId, { action: 'mlReady' }, { frameId });
+          } catch (error) {
+            await logger.debug('ML classifier injection failed', error);
+          }
+        }
+        sendResponse({ ok: true });
+        return;
+      }
+
       if (message?.action === 'getStats') {
         sendResponse(await buildStatsResponse());
         return;
@@ -1150,6 +1247,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
       if (message?.action === 'setDebug') {
         sendResponse(await setDebugMode(Boolean(message.enabled)));
+        return;
+      }
+
+      if (message?.action === 'setSponsorBlock') {
+        sendResponse(await setSponsorBlock(Boolean(message.enabled)));
         return;
       }
 

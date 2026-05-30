@@ -1,0 +1,3338 @@
+[
+  {
+    "id": 1,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||coinhive.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||coin-hive.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||coinhive-manager.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 4,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||authedmine.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 5,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||cnhv.co",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 6,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||jsecoin.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 7,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||load.jsecoin.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 8,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||server.jsecoin.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 9,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||crypto-loot.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 10,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||crypto-loot.org",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 11,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||cryptaloot.pro",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 12,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||webmine.cz",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 13,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||webminepool.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 14,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||webminerpool.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 15,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||minero.cc",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 16,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||minero-proxy-01.now.sh",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 17,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||minero-proxy-02.now.sh",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 18,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||coinimp.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 19,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||www.coinimp.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 20,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||www.hashing.win",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 21,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||hashing.win",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 22,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||www.freecontent.bid",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 23,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||freecontent.bid",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 24,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||www.freecontent.date",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 25,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||freecontent.date",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 26,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||www.freecontent.faith",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 27,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||de-content.faith",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 28,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||cdn.static-cnt.bid",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 29,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||jscoinminer.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 30,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||jscoinminer.download",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 31,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||minemytraffic.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 32,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||ad-miner.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 33,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||browsermine.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 34,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||bmst.pw",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 35,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||bmnr.pw",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 36,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||crypto-webminer.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 37,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||webmining.co",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 38,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||monerominer.rocks",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 39,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||coinblind.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 40,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||coinnebula.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 41,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||gridcash.net",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 42,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||2giga.link",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 43,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adlock.in",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 44,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||reasedoper.pw",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 45,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||mataharirama.xyz",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 46,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||listat.biz",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 47,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||lmodr.biz",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 48,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||cdn.cloudcoins.co",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 49,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||cloudcoins.co",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 50,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||ppoi.org",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 51,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||projectpoi.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 52,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||noblocking.bid",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 53,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||candid.zone",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 54,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||cookiescript.info",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 55,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||party-vqwfku.now.sh",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 56,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||miner.pr0gramm.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 57,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||api.inwemo.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 58,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||rocks.io",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 59,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||cpufan.club",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 60,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||coinpot.co",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 61,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||kissdoujin.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 62,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||playerassets.info",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 63,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||etacontent.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 64,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||minescripts.info",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 65,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||jquery-uim.download",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 66,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||go.oclaserver.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 67,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||oclaserver.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 68,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||onclickmax.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 69,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||onclickmega.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 70,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||onclkds.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 71,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||popads.net",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 72,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||popcash.net",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 73,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||propellerads.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 74,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||propu.sh",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 75,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adcash.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 76,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||go.mobtrks.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 77,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||clkmon.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 78,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||clksite.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 79,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adsterra.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 80,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||displaycontentnetwork.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 81,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||pushwhy.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 82,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||pushns.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 83,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||justpushit.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 84,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||allowtds.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 85,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||fastclick.net",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 86,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||trafficjunky.net",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 87,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||trafficstars.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 88,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||exoclick.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 89,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||exosrv.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 90,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||juicyads.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 91,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||hilltopads.net",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 92,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||clickadu.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 93,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adnium.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 94,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adnxs-simple.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 95,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||servedbyadbutler.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 96,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||voluumtrk.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 97,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||voluumtrk2.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 98,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||track.qakds.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 99,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||redirect.media-fox.net",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 100,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||installcore.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 101,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||searchprotect.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 102,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||conduit.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 103,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||crossrider.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 104,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||superfish.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 105,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||dosearches.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 106,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||mysearchdial.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 107,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||delta-search.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 108,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||isearch.omiga-plus.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 109,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||v9.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 110,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||sweetpacks.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 111,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||tech-support-now.live",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 112,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||windows-support-alert.info",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 113,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||your-pc-is-infected.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 114,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||call-microsoft-support.net",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 115,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||fake-flash-update.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 116,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||malwarebytes-download.live",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 117,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||adobe-flashplayer-update.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 118,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||flash-player-update-now.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 119,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||secure-bankofamerica-login.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 120,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||paypal-secure-verification.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 121,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||appleid-verify-account.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 122,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||amazon-account-security.net",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 123,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||netflix-billing-update.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 124,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||microsoft-account-verify.net",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 125,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||dhl-package-tracking-alert.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 126,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||usps-delivery-failed.net",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 127,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||fedex-redelivery-notice.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 128,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||wells-fargo-secure-alert.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 129,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||chase-online-verification.net",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 130,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||coinbase-wallet-verify.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 131,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||metamask-wallet-restore.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 132,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||ledger-live-recovery.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 133,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||binance-account-locked.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 134,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||instagram-copyright-appeal.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 135,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||facebook-security-checkpoint.net",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 136,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||whatsapp-verify-code.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 137,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||gov-uk-tax-refund.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 138,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||irs-tax-refund-claim.net",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  },
+  {
+    "id": 139,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||steam-community-gift.com",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "script",
+        "xmlhttprequest",
+        "websocket",
+        "image",
+        "media",
+        "object",
+        "font",
+        "ping",
+        "other",
+        "stylesheet"
+      ]
+    }
+  }
+]

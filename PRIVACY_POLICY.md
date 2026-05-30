@@ -30,16 +30,32 @@ ShieldBlock AI does not collect:
 
 ## Network Requests
 
-ShieldBlock AI does not send browsing data to external servers.
+ShieldBlock AI does not send your browsing history, page content, or any
+personal identifiers to external servers. It makes only the following outbound
+requests:
 
-The extension only makes outbound requests to download public filter lists used for blocking:
+### 1. Filter list downloads (background service worker)
+
+Public ad/tracker filter lists are downloaded on install and on periodic
+refresh:
 
 - `https://easylist.to/easylist/easylist.txt`
 - `https://easylist.to/easylist/easyprivacy.txt`
 - `https://ublockorigin.github.io/uAssetsCDN/filters/filters.min.txt`
 - `https://filters.adtidy.org/extension/chromium/filters/2.txt`
 
-These requests are made by the background service worker on install and periodic refresh. No page data or user identifiers are attached intentionally by ShieldBlock AI.
+No page data or user identifiers are attached to these requests.
+
+### 2. SponsorBlock segment lookups (YouTube only)
+
+To skip in-video sponsor segments on YouTube, the extension queries the
+community SponsorBlock API at `https://sponsor.ajay.app`. To protect privacy it
+sends **only a 4-character SHA-256 hash prefix of the video ID** (k-anonymity) —
+never the full video ID, your identity, or your watch history. This request is
+made only while you are viewing a YouTube video and protection is enabled.
+
+Malware, phishing, and cryptominer protection uses a blocklist bundled inside
+the extension and requires no network request.
 
 ## Storage
 
@@ -53,7 +69,7 @@ Stored data is limited to:
 - allowlisted domains
 - custom network and cosmetic rules
 - debug flag
-- local subsystem counters
+- local subsystem counters and per-day blocked totals
 
 ## Data Sharing
 

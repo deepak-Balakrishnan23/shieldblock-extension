@@ -2,13 +2,14 @@
   "manifest_version": 3,
   "name": "ShieldBlock AI",
   "version": "3.0.0",
-  "description": "Advanced ad blocking with AI-powered detection. Blocks ads, trackers, and annoyances with zero data collection.",
+  "description": "AI-powered blocker for ads, trackers, malware and YouTube ads, with built-in SponsorBlock. On-device filtering, fast and private.",
   "minimum_chrome_version": "111",
   "permissions": [
     "declarativeNetRequest",
     "storage",
     "alarms",
-    "tabs"
+    "tabs",
+    "scripting"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -55,7 +56,8 @@
       ],
       "js": [
         "cosmetic.js",
-        "content.js"
+        "content.js",
+        "sponsorblock.js"
       ],
       "run_at": "document_start"
     },
@@ -64,7 +66,6 @@
         "<all_urls>"
       ],
       "js": [
-        "ml-classifier.js",
         "heuristic.js"
       ],
       "run_at": "document_idle"
@@ -92,6 +93,11 @@
         "id": "youtube",
         "enabled": true,
         "path": "rules/youtube-network.json"
+      },
+      {
+        "id": "security",
+        "enabled": true,
+        "path": "rules/security.json"
       }
     ]
   },

@@ -326,6 +326,26 @@
   const pendingMutationRoots = new Set();
   let currentPageAllowlisted = false;
   let mutationFrameId = 0;
+  let protectionEnabled = true;
+
+  // Track the master enabled toggle so YouTube cleanup respects "pause".
+  try {
+    chrome.storage.local.get('enabled').then((result) => {
+      protectionEnabled = result.enabled !== false;
+    }).catch(() => {});
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && 'enabled' in changes) {
+        protectionEnabled = changes.enabled.newValue !== false;
+        if (!protectionEnabled) {
+          removeManagedStyles();
+        } else if (!currentPageAllowlisted) {
+          rerunAllCosmetics();
+        }
+      }
+    });
+  } catch {
+    protectionEnabled = true;
+  }
 
   /**
    * Returns true when the current page is a YouTube surface where only curated
@@ -343,7 +363,8 @@
    */
   async function loadAllowlistState() {
     try {
-      const result = await chrome.storage.local.get('allowlistedDomains');
+      const result = await chrome.storage.local.get(['allowlistedDomains', 'enabled']);
+      protectionEnabled = result.enabled !== false;
       const allowlistedDomains = Array.isArray(result.allowlistedDomains)
         ? result.allowlistedDomains
         : [];
@@ -456,7 +477,7 @@
    * @returns {void}
    */
   function injectGenericCSS() {
-    if (currentPageAllowlisted || isYouTubeSurface()) {
+    if (currentPageAllowlisted || isYouTubeSurface() || !protectionEnabled) {
       return;
     }
     const cssText = buildCssRule(GENERIC_COSMETICS);
@@ -499,11 +520,24 @@
   }
 
   /**
+   * Removes all cosmetic style tags this engine manages. Used when the user
+   * pauses protection so hidden ad slots reappear without a reload.
+   * @returns {void}
+   */
+  function removeManagedStyles() {
+    document.getElementById(GENERIC_STYLE_ID)?.remove();
+    const domainStyles = document.querySelectorAll(`style[id^="${DOMAIN_STYLE_PREFIX}"]`);
+    for (const style of domainStyles) {
+      style.remove();
+    }
+  }
+
+  /**
    * Injects domain-specific cosmetic CSS for the current hostname.
    * @returns {void}
    */
   function injectDomainCSS() {
-    if (currentPageAllowlisted) {
+    if (currentPageAllowlisted || !protectionEnabled) {
       return;
     }
     const hostname = location.hostname.toLowerCase();
@@ -550,7 +584,7 @@
    * @returns {void}
    */
   function hideElement(element) {
-    if (currentPageAllowlisted || !(element instanceof HTMLElement) || isBaitElement(element)) {
+    if (currentPageAllowlisted || !protectionEnabled || !(element instanceof HTMLElement) || isBaitElement(element)) {
       return;
     }
 
@@ -828,16 +862,76 @@
     }
   }
 
+  /**
+   * Neutralizes YouTube's "ad blockers violate Terms" enforcement popup.
+   * Hiding the dialog via CSS is not enough — YouTube also locks page scrolling
+   * by opening a modal backdrop, leaving the page frozen. This removes the
+   * dialog/backdrop nodes and restores scrolling so the video stays usable.
+   * @returns {void}
+   */
+  function dismissYouTubeAdBlockWall() {
+    const ENFORCEMENT_SELECTORS = [
+      'ytd-enforcement-message-view-model',
+      'ytd-popup-container tp-yt-paper-dialog:has(ytd-enforcement-message-view-model)',
+      'tp-yt-paper-dialog:has(yt-playability-error-supported-renderers)',
+    ];
+
+    let found = false;
+    for (const sel of ENFORCEMENT_SELECTORS) {
+      try {
+        document.querySelectorAll(sel).forEach((el) => {
+          const dialog = el.closest('tp-yt-paper-dialog') || el;
+          if (dialog instanceof HTMLElement) {
+            dialog.remove();
+            found = true;
+          }
+        });
+      } catch { /* ignore bad selectors */ }
+    }
+
+    if (found) {
+      try {
+        document.querySelectorAll('tp-yt-iron-overlay-backdrop').forEach((node) => node.remove());
+      } catch { /* ignore */ }
+      // YouTube freezes scrolling while the modal is open; unlock it.
+      for (const node of [document.documentElement, document.body]) {
+        if (node instanceof HTMLElement) {
+          node.style.removeProperty('overflow');
+          node.removeAttribute('scroll-locked');
+        }
+      }
+      // Resume playback if the wall paused the video.
+      try {
+        const video = document.querySelector('video');
+        if (video instanceof HTMLVideoElement && video.paused) {
+          void video.play().catch(() => {});
+        }
+      } catch { /* ignore */ }
+    }
+  }
+
+  /**
+   * Runs the YouTube-specific cleanup passes (companion ads + ad-block wall).
+   * @returns {void}
+   */
+  function runYouTubeCleanup() {
+    if (!protectionEnabled || currentPageAllowlisted) {
+      return;
+    }
+    removeCompanionAds();
+    dismissYouTubeAdBlockWall();
+  }
+
   // Run companion ad removal on YouTube pages via a fast interval
   if (isYouTubeSurface()) {
     // Initial run
-    setTimeout(removeCompanionAds, 500);
-    setTimeout(removeCompanionAds, 1500);
-    setTimeout(removeCompanionAds, 3000);
+    setTimeout(runYouTubeCleanup, 500);
+    setTimeout(runYouTubeCleanup, 1500);
+    setTimeout(runYouTubeCleanup, 3000);
 
     // Watch for dynamically injected companion ads
     const companionObserver = new MutationObserver(() => {
-      removeCompanionAds();
+      runYouTubeCleanup();
     });
 
     const startCompanionObserver = () => {
@@ -855,8 +949,8 @@
 
     // Also re-run on YouTube navigation
     window.addEventListener('yt-navigate-finish', () => {
-      removeCompanionAds();
-      setTimeout(removeCompanionAds, 800);
+      runYouTubeCleanup();
+      setTimeout(runYouTubeCleanup, 800);
     }, { passive: true });
   }
 

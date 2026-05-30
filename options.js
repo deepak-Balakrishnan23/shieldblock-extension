@@ -15,6 +15,7 @@
     saveCustomRules: document.getElementById('save-custom-rules'),
     allowlistContainer: document.getElementById('allowlist-container'),
     debugToggle: document.getElementById('debug-toggle'),
+    sponsorBlockToggle: document.getElementById('sponsorblock-toggle'),
     exportSettings: document.getElementById('export-settings'),
     importFile: document.getElementById('import-file'),
     importSettings: document.getElementById('import-settings'),
@@ -34,6 +35,7 @@
     ruleCount: 0,
     lastUpdated: 0,
     debug: false,
+    sponsorBlockEnabled: true,
     filterListStatus: [],
     filterListConfig: {},
     customRulesText: '',
@@ -126,6 +128,7 @@
     elements.summaryRules.textContent = formatCount(currentSettings.ruleCount);
     elements.summaryUpdated.textContent = formatTimestamp(currentSettings.lastUpdated);
     elements.debugToggle.checked = currentSettings.debug === true;
+    elements.sponsorBlockToggle.checked = currentSettings.sponsorBlockEnabled !== false;
   }
 
   /**
@@ -405,6 +408,28 @@
   }
 
   /**
+   * Toggles the SponsorBlock segment-skipping feature.
+   * @returns {Promise<void>}
+   */
+  async function handleSponsorBlockToggle() {
+    try {
+      const settings = await sendMessage({
+        action: 'setSponsorBlock',
+        enabled: elements.sponsorBlockToggle.checked,
+      });
+      currentSettings = {
+        ...currentSettings,
+        ...settings,
+      };
+      render();
+      setStatus(`Sponsor skipping ${elements.sponsorBlockToggle.checked ? 'enabled' : 'disabled'}.`, 'success');
+    } catch {
+      elements.sponsorBlockToggle.checked = !elements.sponsorBlockToggle.checked;
+      setStatus('Updating sponsor skipping failed.', 'error');
+    }
+  }
+
+  /**
    * Downloads the current storage payload as JSON.
    * @returns {Promise<void>}
    */
@@ -494,6 +519,9 @@
     void handleSaveCustomRules();
   });
 
+  elements.sponsorBlockToggle.addEventListener('change', () => {
+    void handleSponsorBlockToggle();
+  });
   elements.debugToggle.addEventListener('change', () => {
     void handleDebugToggle();
   });

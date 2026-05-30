@@ -18,6 +18,10 @@
   });
   const AD_RESOURCE_PATTERN = /doubleclick|googlesyndication|pagead2|amazon-adsystem|adnxs|outbrain|taboola|mgid|revcontent|rubiconproject|2mdn\.net/i;
   const TRACKER_RESOURCE_PATTERN = /google-analytics|googletagmanager|facebook\.net\/tr|clarity\.ms|mixpanel|segment\.io|heap\.io|amplitude|fullstory|logrocket|mouseflow|crazyegg|inspectlet|scorecardresearch|quantserve/i;
+  // Known cryptojacking / malware / phishing-kit hosts blocked by the security
+  // ruleset. Matching blocked resources here lets the popup's security counter
+  // reflect real blocks instead of staying permanently at zero.
+  const SECURITY_RESOURCE_PATTERN = /coinhive|coin-hive|authedmine|cryptaloot|crypto-loot|cryptonight|jsecoin|jscoinminer|coinimp|minero|webmine|webminerpool|monerominer|browsermine|crypto-webminer|minemytraffic|ad-miner|gridcash|deepminer|coinblind|popads|popcash|propellerads|propu\.sh|onclickmax|onclkds|adsterra|exosrv|hilltopads|clickadu|installcore|searchprotect|appleid-verify|paypal-secure|secure-bankofamerica|metamask-wallet-restore|ledger-live-recovery|coinbase-wallet-verify|irs-tax-refund|gov-uk-tax-refund|fake-flash-update|tech-support-now|windows-support-alert/i;
 
   let currentPageRules = {
     selectors: [],
@@ -224,10 +228,13 @@
   /**
    * Returns the stat bucket for a blocked-looking resource timing entry.
    * @param {PerformanceResourceTiming} entry
-   * @returns {'ads' | 'trackers' | ''}
+   * @returns {'ads' | 'trackers' | 'phishing' | ''}
    */
   function classifyBlockedResource(entry) {
     const url = entry.name || '';
+    if (SECURITY_RESOURCE_PATTERN.test(url)) {
+      return 'phishing';
+    }
     if (TRACKER_RESOURCE_PATTERN.test(url)) {
       return 'trackers';
     }
@@ -478,6 +485,42 @@
 
     return false;
   });
+
+  /**
+   * Publishes the master enabled state as a DOM attribute so MAIN-world
+   * scriptlets (which cannot read chrome.storage) can honor the pause toggle.
+   * @param {unknown} enabled
+   * @returns {void}
+   */
+  function applyEnabledFlag(enabled) {
+    document.documentElement?.setAttribute(
+      'data-shieldblock-enabled',
+      enabled !== false ? 'true' : 'false',
+    );
+  }
+
+  /**
+   * Reads the current enabled state and publishes it.
+   * @returns {Promise<void>}
+   */
+  async function syncEnabledFlag() {
+    try {
+      const result = await chrome.storage.local.get('enabled');
+      applyEnabledFlag(result.enabled);
+    } catch {
+      // Default to active when storage is unavailable.
+    }
+  }
+
+  // Keep the published flag in sync when the user toggles protection live.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && 'enabled' in changes) {
+      applyEnabledFlag(changes.enabled.newValue);
+    }
+  });
+
+  // Publish ASAP (independent of the visibility-delayed init below).
+  void syncEnabledFlag();
 
   void (async () => {
     await waitForVisibleStart();

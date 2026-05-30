@@ -12,8 +12,10 @@
       const root = globalThis;
       const AD_KEYS = [
         'adSlots',
+        'playerAds',
         'playerAdsConfig',
         'adPlacements',
+        'adPlacementsConfig',
         'auxiliaryUi',
         'adBreakHeartbeatParams',
         'adBreaks',
@@ -28,11 +30,11 @@
         'playabilityStatus',
         'streamingData',
       ]);
-      const SKIP_SELECTOR = '.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern';
+      const SKIP_SELECTOR = '.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button-container button, button.ytp-ad-skip-button-modern, [class*="ytp-ad-skip-button"]';
       let autoSkipIntervalId = 0;
       let lastSkipAt = 0;
       let lastSkipButton = null;
-      let missingPlayerTicks = 0;
+      let adMuted = false;
 
       /**
        * Returns true when a value is a traversable object.
@@ -41,6 +43,33 @@
        */
       function isObject(value) {
         return value !== null && typeof value === 'object';
+      }
+
+      /**
+       * Returns true when ShieldBlock should actively block on this page.
+       * content.js (isolated world) publishes the master enabled state and the
+       * allowlist state as attributes on <html>; when protection is paused or
+       * the site is allowlisted, every YouTube hook below becomes a no-op so the
+       * pause toggle actually works. Defaults to active before content.js has
+       * published the flag (document_start), which is the safe blocking default.
+       * @returns {boolean}
+       */
+      function isActive() {
+        try {
+          const el = document.documentElement;
+          if (!el) {
+            return true;
+          }
+          if (el.getAttribute('data-shieldblock-enabled') === 'false') {
+            return false;
+          }
+          if (el.getAttribute('data-shieldblock-allowlisted') === 'true') {
+            return false;
+          }
+          return true;
+        } catch {
+          return true;
+        }
       }
 
       /**
@@ -155,8 +184,9 @@
             : (resource instanceof Request ? resource.url : String(resource));
 
           // Only intercept the Innertube player endpoint — let everything else
-          // pass through to the previous wrapper (no-fetch-if) normally
-          if (!url.includes('/youtubei/') || !url.includes('/player')) {
+          // pass through to the previous wrapper (no-fetch-if) normally.
+          // Also pass through untouched when protection is paused/allowlisted.
+          if (!url.includes('/youtubei/') || !url.includes('/player') || !isActive()) {
             return Reflect.apply(previousFetch, this, [resource, init]);
           }
 
@@ -171,10 +201,27 @@
               stripAdData(json);
             }
 
+            // Rebuild headers from the original response but drop entity headers
+            // that no longer describe our re-serialized body. The upstream body
+            // arrives compressed (content-encoding: gzip/br) with its own
+            // content-length; our JSON string is plain and a different size, so
+            // reusing those headers makes the browser fail to decode the body
+            // (ERR_CONTENT_DECODING_FAILED) or hit a length mismatch — both of
+            // which intermittently break video playback.
+            const cleanHeaders = new Headers();
+            result.headers.forEach((value, key) => {
+              const name = key.toLowerCase();
+              if (name === 'content-encoding' || name === 'content-length') {
+                return;
+              }
+              cleanHeaders.set(key, value);
+            });
+            cleanHeaders.set('content-type', 'application/json; charset=utf-8');
+
             return new Response(JSON.stringify(json), {
               status: result.status,
               statusText: result.statusText,
-              headers: result.headers,
+              headers: cleanHeaders,
             });
           } catch {
             // Fallback: pass through normally
@@ -186,6 +233,149 @@
           Object.defineProperty(root.fetch, '__sbYtWrapped', {
             value: true, configurable: true, enumerable: false, writable: false
           });
+        } catch { /* ignore */ }
+      }
+
+      /**
+       * Intercepts YouTube's Innertube /youtubei/v1/player XHR calls and strips
+       * ad data from the response. Some YouTube clients still deliver the player
+       * response over XHR rather than fetch; this complements the fetch path.
+       * Sanitization is best-effort — on any failure the original response is
+       * left untouched so playback is never broken.
+       * @returns {void}
+       */
+      function installInnertubeXhrInterceptor() {
+        if (root.__sb_innertube_xhr_hooked === true) return;
+        const XHR = root.XMLHttpRequest;
+        if (typeof XHR !== 'function' || !XHR.prototype) return;
+        root.__sb_innertube_xhr_hooked = true;
+
+        const originalOpen = XHR.prototype.open;
+        const originalSend = XHR.prototype.send;
+
+        XHR.prototype.open = function shieldBlockYtXhrOpen(method, url, ...rest) {
+          try {
+            const requestUrl = typeof url === 'string' ? url : String(url || '');
+            this.__sb_yt_player = requestUrl.includes('/youtubei/') && requestUrl.includes('/player');
+          } catch {
+            this.__sb_yt_player = false;
+          }
+          return Reflect.apply(originalOpen, this, [method, url, ...rest]);
+        };
+
+        XHR.prototype.send = function shieldBlockYtXhrSend(...args) {
+          if (this.__sb_yt_player === true) {
+            this.addEventListener('readystatechange', function sbYtXhrReady() {
+              if (this.readyState !== 4 || !isActive()) return;
+              try {
+                const responseType = this.responseType;
+                if (responseType !== '' && responseType !== 'text' && responseType !== 'json') {
+                  return;
+                }
+
+                const parsed = responseType === 'json'
+                  ? this.response
+                  : JSON.parse(this.responseText);
+
+                if (!isObject(parsed)) return;
+                stripAdData(parsed);
+
+                const serialized = JSON.stringify(parsed);
+                Object.defineProperty(this, 'responseText', {
+                  configurable: true,
+                  get() { return serialized; },
+                });
+                Object.defineProperty(this, 'response', {
+                  configurable: true,
+                  get() { return responseType === 'json' ? parsed : serialized; },
+                });
+              } catch {
+                // Leave the original response untouched on any failure.
+              }
+            });
+          }
+          return Reflect.apply(originalSend, this, args);
+        };
+      }
+
+      /**
+       * Returns true when running on a YouTube surface.
+       * @returns {boolean}
+       */
+      function isYouTubeHost() {
+        try {
+          const host = location.hostname.replace(/^www\./, '').toLowerCase();
+          return host === 'youtube.com'
+            || host.endsWith('.youtube.com')
+            || host === 'youtu.be'
+            || host === 'youtube-nocookie.com'
+            || host.endsWith('.youtube-nocookie.com');
+        } catch {
+          return false;
+        }
+      }
+
+      /**
+       * Returns true when an object looks like a YouTube player response.
+       * @param {Record<string, unknown>} value
+       * @returns {boolean}
+       */
+      function looksLikePlayerResponse(value) {
+        return 'adPlacements' in value
+          || 'playerAds' in value
+          || 'adSlots' in value
+          || 'adPlacementsConfig' in value
+          || ('streamingData' in value && 'videoDetails' in value);
+      }
+
+      /**
+       * Hooks JSON.parse and Response.prototype.json so ad data is stripped from
+       * the player response no matter which transport delivers it. Modern
+       * YouTube parses the player/next payloads from text in code paths the
+       * fetch and XHR wrappers never observe, so this is the catch-all that
+       * actually removes the ads the targeted hooks miss. Installed only on
+       * YouTube surfaces to avoid touching JSON parsing on the wider web.
+       * @returns {void}
+       */
+      function installJsonHooks() {
+        if (root.__sb_yt_json_hooked === true || !isYouTubeHost()) return;
+        root.__sb_yt_json_hooked = true;
+
+        try {
+          const originalParse = root.JSON.parse;
+          root.JSON.parse = function shieldBlockJsonParse(text, reviver) {
+            const result = Reflect.apply(originalParse, this, [text, reviver]);
+            try {
+              if (isObject(result) && isActive()) {
+                if (looksLikePlayerResponse(result)) {
+                  stripAdData(result);
+                } else if ('contents' in result) {
+                  stripInitialData(result);
+                }
+              }
+            } catch { /* ignore prune failures */ }
+            return result;
+          };
+        } catch { /* ignore */ }
+
+        try {
+          const proto = root.Response && root.Response.prototype;
+          if (proto && typeof proto.json === 'function' && proto.json.__sbWrapped !== true) {
+            const originalJson = proto.json;
+            const wrappedJson = async function shieldBlockResponseJson() {
+              const data = await Reflect.apply(originalJson, this, arguments);
+              try {
+                if (isObject(data) && isActive() && looksLikePlayerResponse(data)) {
+                  stripAdData(data);
+                }
+              } catch { /* ignore prune failures */ }
+              return data;
+            };
+            Object.defineProperty(wrappedJson, '__sbWrapped', {
+              value: true, configurable: true, enumerable: false, writable: false,
+            });
+            proto.json = wrappedJson;
+          }
         } catch { /* ignore */ }
       }
 
@@ -227,6 +417,9 @@
        * @returns {boolean}
        */
       function clickSkipButton() {
+        if (!isActive()) {
+          return false;
+        }
         const button = document.querySelector(SKIP_SELECTOR);
         if (!isVisible(button)) {
           return false;
@@ -244,114 +437,113 @@
       }
 
       /**
-       * Fast-forwards ad playback when YouTube flags the player as ad-showing.
+       * Returns true when the player is currently showing an ad.
+       * @param {Element} player
+       * @returns {boolean}
+       */
+      function isAdShowing(player) {
+        return player.classList.contains('ad-showing')
+          || player.classList.contains('ad-interrupting')
+          || document.querySelector('.ytp-ad-player-overlay, .ytp-ad-player-overlay-layout, .ytp-ad-overlay-slot') !== null
+          || document.querySelector('.video-ads .ad-showing') !== null;
+      }
+
+      /**
+       * Skips or fast-forwards the current ad, and restores playback state when
+       * no ad is present. Designed to be called repeatedly from a persistent
+       * loop so pre-roll, mid-roll, and back-to-back ads are all handled — not
+       * just the first ad on page load.
        * @returns {boolean}
        */
       function fastForwardAd() {
+        if (!isActive()) {
+          return false;
+        }
         const player = getPlayerElement();
         const video = getVideoElement();
         if (!player || !video) {
           return false;
         }
 
-        // Only use reliable, specific signals.
-        // '.ad-showing' on the player container is the most reliable signal.
-        // '.ytp-ad-player-overlay' is a strong signal (only present during ads).
-        // Do NOT use '.video-ads.ytp-ad-module' — it stays in DOM during normal video.
-        // Do NOT use '.ytp-ad-text' — too broad.
-        const adShowing = player.classList.contains('ad-showing')
-          || document.querySelector('.ytp-ad-player-overlay') !== null;
-
-        if (!adShowing) {
+        if (!isAdShowing(player)) {
+          // Ad finished — undo the changes we made for the ad.
+          if (adMuted) {
+            video.muted = false;
+            adMuted = false;
+          }
+          if (video.playbackRate > 8) {
+            video.playbackRate = 1;
+          }
           return false;
         }
 
-        // Mute immediately so user doesn't hear the ad
+        // Mute the ad audio. Remember that *we* muted so we can safely restore.
         if (!video.muted) {
           video.muted = true;
-          // Restore mute state after ad ends
-          video.addEventListener('adend', () => { video.muted = false; }, { once: true });
+          adMuted = true;
         }
 
-        // Skip button — click it if visible
-        const skipBtn = document.querySelector(
-          '.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern, [class*="skip-button"]'
-        );
+        // Prefer an explicit skip button when YouTube offers one.
+        const skipBtn = document.querySelector(SKIP_SELECTOR);
         if (skipBtn instanceof HTMLElement && skipBtn.offsetParent !== null) {
           skipBtn.click();
-          return true;
         }
 
-        // Fast-forward to end
+        // Seek the ad to its end. This ends skippable and unskippable ads alike
+        // because the ad plays in the same <video> element with its own short
+        // duration. Re-applied every tick so back-to-back ads are burned through.
         if (Number.isFinite(video.duration) && video.duration > 0) {
-          video.currentTime = video.duration;
-          video.muted = false;
-          return true;
+          try {
+            video.currentTime = video.duration;
+          } catch {
+            // Some ad states briefly reject seeking; the next tick retries.
+          }
+        } else if (video.playbackRate < 16) {
+          // Duration not yet known — burn through at max rate until it is.
+          try {
+            video.playbackRate = 16;
+          } catch {
+            // Ignore rate rejection.
+          }
         }
 
-        // Last resort: set playback rate to 16x to burn through the ad
-        if (video.playbackRate < 16) {
-          video.playbackRate = 16;
-          video.addEventListener('ended', () => { video.playbackRate = 1; }, { once: true });
-        }
-
-        return false;
+        return true;
       }
 
       /**
-       * Stops the auto-skip loop.
-       * @returns {void}
-       */
-      function stopAutoSkipLoop() {
-        if (autoSkipIntervalId !== 0) {
-          clearInterval(autoSkipIntervalId);
-          autoSkipIntervalId = 0;
-        }
-        missingPlayerTicks = 0;
-      }
-
-      /**
-       * Starts the auto-skip loop if a player is present.
+       * Starts a persistent loop that skips ads for the lifetime of the page.
+       * Unlike the previous implementation it never self-terminates, so mid-roll
+       * and late pre-roll ads are caught instead of slipping through after the
+       * loop shut itself off.
        * @returns {void}
        */
       function ensureAutoSkipLoop() {
-        if (autoSkipIntervalId !== 0) {
+        if (autoSkipIntervalId !== 0 || !isYouTubeHost()) {
           return;
         }
 
-        let consecutiveNoAdTicks = 0;
         autoSkipIntervalId = setInterval(() => {
           try {
-            const player = getPlayerElement();
-            if (!player) {
-              missingPlayerTicks += 1;
-              if (missingPlayerTicks >= 12) {
-                stopAutoSkipLoop();
+            if (!isActive()) {
+              // Protection paused/allowlisted — undo any ad-state changes and idle.
+              const video = getVideoElement();
+              if (video) {
+                if (adMuted) {
+                  video.muted = false;
+                  adMuted = false;
+                }
+                if (video.playbackRate > 8) {
+                  video.playbackRate = 1;
+                }
               }
               return;
             }
-
-            missingPlayerTicks = 0;
-
-            // Only act if ad is actually showing — stop the loop if no ad for 3s
-            const isAdShowing = player.classList.contains('ad-showing')
-              || document.querySelector('.ytp-ad-player-overlay') !== null;
-
-            if (!isAdShowing) {
-              consecutiveNoAdTicks += 1;
-              if (consecutiveNoAdTicks >= 30) {  // 3 seconds at 100ms
-                stopAutoSkipLoop();
-              }
-              return;
-            }
-
-            consecutiveNoAdTicks = 0;
             clickSkipButton();
             fastForwardAd();
           } catch {
-            // Ignore loop failures.
+            // Ignore loop failures; the next tick retries.
           }
-        }, 100);
+        }, 250);
       }
 
       /**
@@ -387,7 +579,7 @@
               return storedValue;
             },
             set(value) {
-              storedValue = sanitizer(value);
+              storedValue = isActive() ? sanitizer(value) : value;
               if (propertyName === 'ytInitialPlayerResponse') {
                 ensureAutoSkipLoop();
               }
@@ -407,16 +599,18 @@
        * @returns {void}
        */
       function handleNavigation() {
-        try {
-          root.ytInitialPlayerResponse = stripAdData(root.ytInitialPlayerResponse);
-        } catch {
-          // Ignore navigation cleanup failures.
-        }
+        if (isActive()) {
+          try {
+            root.ytInitialPlayerResponse = stripAdData(root.ytInitialPlayerResponse);
+          } catch {
+            // Ignore navigation cleanup failures.
+          }
 
-        try {
-          root.ytInitialData = stripInitialData(root.ytInitialData);
-        } catch {
-          // Ignore navigation cleanup failures.
+          try {
+            root.ytInitialData = stripInitialData(root.ytInitialData);
+          } catch {
+            // Ignore navigation cleanup failures.
+          }
         }
 
         setTimeout(() => {
@@ -439,14 +633,18 @@
 
       installSanitizedProperty('ytInitialPlayerResponse', stripAdData);
       installSanitizedProperty('ytInitialData', stripInitialData);
+      installJsonHooks();
       installInnertubeFetchInterceptor();
+      installInnertubeXhrInterceptor();
 
       document.addEventListener('yt-navigate-finish', handleNavigation, { passive: true });
 
       setTimeout(() => {
         try {
-          root.ytInitialPlayerResponse = stripAdData(root.ytInitialPlayerResponse);
-          root.ytInitialData = stripInitialData(root.ytInitialData);
+          if (isActive()) {
+            root.ytInitialPlayerResponse = stripAdData(root.ytInitialPlayerResponse);
+            root.ytInitialData = stripInitialData(root.ytInitialData);
+          }
           clickSkipButton();
           fastForwardAd();
           ensureAutoSkipLoop();

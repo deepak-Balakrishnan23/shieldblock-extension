@@ -571,5 +571,105 @@
         "image"
       ]
     }
+  },
+  {
+    "id": 39,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||youtube.com/api/stats/atr",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "ping",
+        "image"
+      ]
+    }
+  },
+  {
+    "id": 40,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||googleads.g.doubleclick.net/",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "script",
+        "image",
+        "sub_frame",
+        "media",
+        "ping"
+      ]
+    }
+  },
+  {
+    "id": 41,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||pubads.g.doubleclick.net/",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "script",
+        "image",
+        "sub_frame",
+        "media",
+        "ping"
+      ]
+    }
+  },
+  {
+    "id": 42,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||securepubads.g.doubleclick.net/",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "script",
+        "image",
+        "sub_frame",
+        "media",
+        "ping"
+      ]
+    }
+  },
+  {
+    "id": 43,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||tpc.googlesyndication.com/",
+      "resourceTypes": [
+        "xmlhttprequest",
+        "script",
+        "image",
+        "sub_frame",
+        "media",
+        "ping"
+      ]
+    }
+  },
+  {
+    "id": 44,
+    "priority": 100,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||static.doubleclick.net/instream/ad_status.js",
+      "resourceTypes": [
+        "script"
+      ]
+    }
   }
 ]

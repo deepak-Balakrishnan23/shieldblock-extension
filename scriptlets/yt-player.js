@@ -21,20 +21,38 @@
         'adBreaks',
         'adPreroll',
         'adPostroll',
-        'externalVideoId',
         'paidContentOverlay',
         'survey',
       ];
+      // `externalVideoId` was deliberately removed from the list above. It is a
+      // video identifier, not an ad key, and this walk deletes keys at every
+      // depth — so it was being stripped from legitimate branches of the player
+      // response as well as ad ones. Removing it bought nothing, because the ad
+      // subtrees that contain it (adPlacements, playerAds, adSlots) are deleted
+      // wholesale anyway, and a player response missing video ids is a plausible
+      // cause of the player failing to start on its own.
       const PROTECTED_KEYS = new Set([
         'videoDetails',
         'playabilityStatus',
         'streamingData',
       ]);
       const SKIP_SELECTOR = '.ytp-ad-skip-button, .ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button-container button, button.ytp-ad-skip-button-modern, [class*="ytp-ad-skip-button"]';
+      // Overlay containers YouTube frequently leaves in the DOM while empty, so
+      // their presence alone does not mean an ad is playing.
+      const AD_OVERLAY_SELECTORS = [
+        '.ytp-ad-player-overlay',
+        '.ytp-ad-player-overlay-layout',
+        '.ytp-ad-overlay-slot',
+        '.video-ads .ad-showing',
+      ];
+      // How long after burning an ad we will try to resume playback.
+      const AD_RESUME_WINDOW_MS = 4000;
       let autoSkipIntervalId = 0;
       let lastSkipAt = 0;
       let lastSkipButton = null;
       let adMuted = false;
+      let burnedAdAt = 0;
+      let autoplayAttemptedSrc = '';
 
       /**
        * Returns true when a value is a traversable object.
@@ -442,10 +460,65 @@
        * @returns {boolean}
        */
       function isAdShowing(player) {
+        if (isVideoAdPlaying(player)) {
+          return true;
+        }
+
+        // Presence alone is not proof: these containers are routinely left in
+        // the DOM, empty, once an ad has finished. Treating an empty container
+        // as an ad kept the engine in ad mode over the real video.
+        return AD_OVERLAY_SELECTORS.some((selector) => isVisible(document.querySelector(selector)));
+      }
+
+      /**
+       * Returns true when a video ad is playing in the player element itself.
+       *
+       * This is the only signal precise enough to justify seeking, since seeking
+       * on a false positive would send the real video to its end.
+       * @param {Element} player
+       * @returns {boolean}
+       */
+      function isVideoAdPlaying(player) {
         return player.classList.contains('ad-showing')
-          || player.classList.contains('ad-interrupting')
-          || document.querySelector('.ytp-ad-player-overlay, .ytp-ad-player-overlay-layout, .ytp-ad-overlay-slot') !== null
-          || document.querySelector('.video-ads .ad-showing') !== null;
+          || player.classList.contains('ad-interrupting');
+      }
+
+      /**
+       * Starts playback once per video when the player loaded it but never
+       * started it.
+       *
+       * Removing the pre-roll is what exposes this: YouTube's own autoplay is
+       * driven by the ad/playback sequence, so with the ad gone the real video
+       * can sit ready at 0:00 and wait for a manual click.
+       *
+       * Deliberately conservative — one attempt per media source, only while the
+       * video is loaded, paused, and still untouched at 0:00. A video the viewer
+       * paused themselves has `currentTime > 0` and is left alone.
+       * @param {HTMLVideoElement} video
+       * @returns {void}
+       */
+      function restoreAutoplay(video) {
+        const source = video.currentSrc || video.src || '';
+        if (!source || autoplayAttemptedSrc === source) {
+          return;
+        }
+
+        // HAVE_CURRENT_DATA or better; before that `paused` is not meaningful.
+        if (video.readyState < 2) {
+          return;
+        }
+
+        autoplayAttemptedSrc = source;
+        if (!video.paused || video.currentTime > 0 || video.ended) {
+          return;
+        }
+
+        const started = video.play();
+        if (started && typeof started.catch === 'function') {
+          started.catch(() => {
+            // Autoplay refused by the browser; the viewer can still press play.
+          });
+        }
       }
 
       /**
@@ -474,6 +547,27 @@
           if (video.playbackRate > 8) {
             video.playbackRate = 1;
           }
+
+          // Seeking an ad to its end fires `ended` on the player, and the real
+          // video that follows often stays paused — leaving the user to press
+          // play manually. Resume it, but only in a short window after we
+          // actually burned an ad, so a deliberate pause is never overridden.
+          if (burnedAdAt !== 0) {
+            if (!video.paused) {
+              burnedAdAt = 0;
+            } else if (Date.now() - burnedAdAt > AD_RESUME_WINDOW_MS) {
+              burnedAdAt = 0;
+            } else if (!video.ended) {
+              const resumed = video.play();
+              if (resumed && typeof resumed.catch === 'function') {
+                resumed.catch(() => {
+                  // Autoplay refused; the user can still start it manually.
+                });
+              }
+            }
+          }
+
+          restoreAutoplay(video);
           return false;
         }
 
@@ -489,12 +583,20 @@
           skipBtn.click();
         }
 
+        // Only seek when the player itself reports a video ad. An overlay-only
+        // signal means a banner ad over the real video, where seeking would
+        // throw the viewer to the end of what they are watching.
+        if (!isVideoAdPlaying(player)) {
+          return true;
+        }
+
         // Seek the ad to its end. This ends skippable and unskippable ads alike
         // because the ad plays in the same <video> element with its own short
         // duration. Re-applied every tick so back-to-back ads are burned through.
         if (Number.isFinite(video.duration) && video.duration > 0) {
           try {
             video.currentTime = video.duration;
+            burnedAdAt = Date.now();
           } catch {
             // Some ad states briefly reject seeking; the next tick retries.
           }
@@ -502,6 +604,7 @@
           // Duration not yet known — burn through at max rate until it is.
           try {
             video.playbackRate = 16;
+            burnedAdAt = Date.now();
           } catch {
             // Ignore rate rejection.
           }
@@ -527,6 +630,7 @@
             if (!isActive()) {
               // Protection paused/allowlisted — undo any ad-state changes and idle.
               const video = getVideoElement();
+              burnedAdAt = 0;
               if (video) {
                 if (adMuted) {
                   video.muted = false;
@@ -599,6 +703,10 @@
        * @returns {void}
        */
       function handleNavigation() {
+        // New video: allow one autoplay attempt for it.
+        autoplayAttemptedSrc = '';
+        burnedAdAt = 0;
+
         if (isActive()) {
           try {
             root.ytInitialPlayerResponse = stripAdData(root.ytInitialPlayerResponse);

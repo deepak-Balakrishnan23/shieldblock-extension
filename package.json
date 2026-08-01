@@ -1,0 +1,17 @@
+{
+  "name": "shieldblock-extension",
+  "version": "3.0.0",
+  "private": true,
+  "description": "ShieldBlock AI — MV3 ad, tracker, and annoyance blocker with on-device heuristics.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test \"tests/**/*.test.mjs\"",
+    "package": "npm run validate:rules && node tools/package.mjs",
+    "build:rules": "node tools/build-rules.mjs && npm run validate:rules",
+    "validate:rules": "node tools/validate-rules.mjs",
+    "screenshots": "node tools/make-screenshots.mjs"
+  }
+}

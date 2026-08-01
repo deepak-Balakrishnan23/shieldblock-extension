@@ -27,6 +27,12 @@
     selectors: [],
     allowlisted: false,
   };
+  // Blocked elements and requests arrive in bursts — dozens on an ad-heavy page.
+  // Counting them individually woke the service worker once per hit, so they are
+  // accumulated here and flushed as a single message.
+  const STAT_FLUSH_DELAY_MS = 1000;
+  const pendingStats = Object.create(null);
+  let statFlushTimer = 0;
   let pickerActive = false;
   let highlightedElement = null;
   let countedElements = new WeakSet();
@@ -42,6 +48,44 @@
       return await chrome.runtime.sendMessage(payload);
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Sends the accumulated stat counts and clears the buffer.
+   * @returns {void}
+   */
+  function flushStats() {
+    if (statFlushTimer !== 0) {
+      window.clearTimeout(statFlushTimer);
+      statFlushTimer = 0;
+    }
+
+    const counts = {};
+    let hasCounts = false;
+    for (const stat of Object.keys(pendingStats)) {
+      if (pendingStats[stat] > 0) {
+        counts[stat] = pendingStats[stat];
+        hasCounts = true;
+      }
+      delete pendingStats[stat];
+    }
+
+    if (hasCounts) {
+      void sendMessage({ action: 'incrementStats', counts });
+    }
+  }
+
+  /**
+   * Records one blocked item, flushing on a short delay so bursts collapse into
+   * a single message.
+   * @param {string} stat
+   * @returns {void}
+   */
+  function recordStat(stat) {
+    pendingStats[stat] = (pendingStats[stat] || 0) + 1;
+    if (statFlushTimer === 0) {
+      statFlushTimer = window.setTimeout(flushStats, STAT_FLUSH_DELAY_MS);
     }
   }
 
@@ -167,10 +211,7 @@
     for (const [attributeName, stat] of Object.entries(HIDDEN_MARKER_MAP)) {
       if (element.hasAttribute(attributeName)) {
         countedElements.add(element);
-        void sendMessage({
-          action: 'incrementStat',
-          stat,
-        });
+        recordStat(stat);
         break;
       }
     }
@@ -288,10 +329,7 @@
             countedPerformanceEntries.clear();
           }
 
-          void sendMessage({
-            action: 'incrementStat',
-            stat,
-          });
+          recordStat(stat);
         }
       });
 
@@ -521,6 +559,15 @@
 
   // Publish ASAP (independent of the visibility-delayed init below).
   void syncEnabledFlag();
+
+  // Flush buffered counts before the page goes away, so the last burst on a
+  // short-lived page is not lost.
+  window.addEventListener('pagehide', flushStats, { capture: true });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      flushStats();
+    }
+  }, { passive: true });
 
   void (async () => {
     await waitForVisibleStart();

@@ -1,0 +1,117 @@
+/* Shared layout for the 1280x800 Chrome Web Store screenshot frames. */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 1280px;
+  height: 800px;
+  overflow: hidden;
+}
+
+body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background:
+    radial-gradient(1100px 620px at 78% -12%, rgba(59, 130, 246, 0.22), transparent 62%),
+    radial-gradient(820px 520px at 6% 108%, rgba(16, 185, 129, 0.16), transparent 60%),
+    #070b14;
+  color: #f8fafc;
+  display: grid;
+  grid-template-columns: 470px 1fr;
+  align-items: center;
+  gap: 40px;
+  padding: 64px 62px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.copy { max-width: 420px; }
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 30px;
+}
+
+.brand img { width: 30px; height: 30px; }
+
+.brand span {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #93c5fd;
+}
+
+h1 {
+  font-size: 43px;
+  line-height: 1.09;
+  font-weight: 700;
+  letter-spacing: -0.023em;
+  margin-bottom: 18px;
+}
+
+h1 em {
+  font-style: normal;
+  background: linear-gradient(96deg, #60a5fa, #34d399);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+p.sub {
+  font-size: 17.5px;
+  line-height: 1.55;
+  color: #a9b6cc;
+}
+
+ul.points {
+  margin-top: 26px;
+  display: grid;
+  gap: 12px;
+  list-style: none;
+}
+
+ul.points li {
+  position: relative;
+  padding-left: 26px;
+  font-size: 15.5px;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+ul.points li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #60a5fa, #34d399);
+}
+
+/* Device shell holding the live UI */
+.stage {
+  justify-self: center;
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #0b1220;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  box-shadow: 0 40px 90px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+.stage iframe {
+  display: block;
+  border: 0;
+}
+
+.stage.popup iframe { width: 384px; height: 468px; }
+
+/* Kept above the options page's 920px breakpoint so the sidebar
+   stays beside the panel instead of stacking. */
+.stage.wide iframe { width: 960px; height: 700px; }
+
+/* The filter-list panel is the one long panel; it needs the extra rows. */
+.stage.wide.tall iframe { height: 980px; }
+
+.stage.wide { transform: scale(0.66); transform-origin: center; }

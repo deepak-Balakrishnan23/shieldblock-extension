@@ -3,7 +3,7 @@
   "name": "ShieldBlock AI",
   "version": "3.0.0",
   "description": "AI-powered blocker for ads, trackers, malware and YouTube ads, with built-in SponsorBlock. On-device filtering, fast and private.",
-  "minimum_chrome_version": "111",
+  "minimum_chrome_version": "120",
   "permissions": [
     "declarativeNetRequest",
     "storage",
@@ -98,6 +98,146 @@
         "id": "security",
         "enabled": true,
         "path": "rules/security.json"
+      },
+      {
+        "id": "gen-exc-01",
+        "enabled": true,
+        "path": "rules/generated/exc-01.json"
+      },
+      {
+        "id": "gen-exc-02",
+        "enabled": true,
+        "path": "rules/generated/exc-02.json"
+      },
+      {
+        "id": "gen-core-01",
+        "enabled": true,
+        "path": "rules/generated/core-01.json"
+      },
+      {
+        "id": "gen-core-02",
+        "enabled": true,
+        "path": "rules/generated/core-02.json"
+      },
+      {
+        "id": "gen-core-03",
+        "enabled": true,
+        "path": "rules/generated/core-03.json"
+      },
+      {
+        "id": "gen-core-04",
+        "enabled": true,
+        "path": "rules/generated/core-04.json"
+      },
+      {
+        "id": "gen-core-05",
+        "enabled": true,
+        "path": "rules/generated/core-05.json"
+      },
+      {
+        "id": "gen-ext-01",
+        "enabled": false,
+        "path": "rules/generated/ext-01.json"
+      },
+      {
+        "id": "gen-ext-02",
+        "enabled": false,
+        "path": "rules/generated/ext-02.json"
+      },
+      {
+        "id": "gen-ext-03",
+        "enabled": false,
+        "path": "rules/generated/ext-03.json"
+      },
+      {
+        "id": "gen-ext-04",
+        "enabled": false,
+        "path": "rules/generated/ext-04.json"
+      },
+      {
+        "id": "gen-ext-05",
+        "enabled": false,
+        "path": "rules/generated/ext-05.json"
+      },
+      {
+        "id": "gen-ext-06",
+        "enabled": false,
+        "path": "rules/generated/ext-06.json"
+      },
+      {
+        "id": "gen-ext-07",
+        "enabled": false,
+        "path": "rules/generated/ext-07.json"
+      },
+      {
+        "id": "gen-ext-08",
+        "enabled": false,
+        "path": "rules/generated/ext-08.json"
+      },
+      {
+        "id": "gen-ext-09",
+        "enabled": false,
+        "path": "rules/generated/ext-09.json"
+      },
+      {
+        "id": "gen-ext-10",
+        "enabled": false,
+        "path": "rules/generated/ext-10.json"
+      },
+      {
+        "id": "gen-ext-11",
+        "enabled": false,
+        "path": "rules/generated/ext-11.json"
+      },
+      {
+        "id": "gen-ext-12",
+        "enabled": false,
+        "path": "rules/generated/ext-12.json"
+      },
+      {
+        "id": "gen-ext-13",
+        "enabled": false,
+        "path": "rules/generated/ext-13.json"
+      },
+      {
+        "id": "gen-ext-14",
+        "enabled": false,
+        "path": "rules/generated/ext-14.json"
+      },
+      {
+        "id": "gen-ext-15",
+        "enabled": false,
+        "path": "rules/generated/ext-15.json"
+      },
+      {
+        "id": "gen-ext-16",
+        "enabled": false,
+        "path": "rules/generated/ext-16.json"
+      },
+      {
+        "id": "gen-ext-17",
+        "enabled": false,
+        "path": "rules/generated/ext-17.json"
+      },
+      {
+        "id": "gen-ext-18",
+        "enabled": false,
+        "path": "rules/generated/ext-18.json"
+      },
+      {
+        "id": "gen-ext-19",
+        "enabled": false,
+        "path": "rules/generated/ext-19.json"
+      },
+      {
+        "id": "gen-ext-20",
+        "enabled": false,
+        "path": "rules/generated/ext-20.json"
+      },
+      {
+        "id": "gen-ext-21",
+        "enabled": false,
+        "path": "rules/generated/ext-21.json"
       }
     ]
   },

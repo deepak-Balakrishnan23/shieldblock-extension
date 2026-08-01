@@ -1,5 +1,4 @@
 const MAX_COMPILED_RULES = 295000;
-const MAX_RULESET_CHUNK = 29500;
 const DEFAULT_RESOURCE_TYPES = Object.freeze([
   'script',
   'image',
@@ -32,16 +31,113 @@ const RESOURCE_TYPE_MAP = Object.freeze({
   other: 'other',
   subdocument: 'sub_frame',
   sub_frame: 'sub_frame',
+  frame: 'sub_frame',
   font: 'font',
+  css: 'stylesheet',
+  doc: 'main_frame',
   document: 'main_frame',
+  'object-subrequest': 'object',
 });
 const NO_OP_MODIFIERS = new Set([
-  'important',
   'match-case',
 ]);
+/** uBlock/AdGuard shorthands for party scoping. */
+const FIRST_PARTY_MODIFIERS = new Set(['~third-party', '1p', '~3p']);
+const THIRD_PARTY_MODIFIERS = new Set(['third-party', '3p', '~1p']);
+/**
+ * Exception modifiers that scope cosmetic filtering or AdGuard-only features
+ * rather than network requests.
+ *
+ * They carry no DNR meaning, but they must be recognized rather than treated as
+ * unknown: `@@||site^$document,elemhide` still contains a real network
+ * exception, and discarding the whole line over `elemhide` would keep the site
+ * broken. A line whose modifiers are *only* from this set is not a network
+ * exception at all and is skipped.
+ */
+const NON_NETWORK_EXCEPTION_MODIFIERS = new Set([
+  'elemhide',
+  'ehide',
+  'generichide',
+  'ghide',
+  'specifichide',
+  'shide',
+  'genericblock',
+  'urlblock',
+  'jsinject',
+  'content',
+  'extension',
+  'stealth',
+]);
+/** Exception modifiers that lift blocking for a whole document and its frames. */
+const DOCUMENT_EXCEPTION_MODIFIERS = new Set(['document', 'all']);
+/**
+ * Priority ladder mirroring ABP precedence.
+ *
+ * DNR picks the highest-priority match, breaking ties by action
+ * (`allowAllRequests` > `allow` > `block`). Ordinary exceptions therefore
+ * outrank ordinary blocks, while `$important` blocks — which list authors mark
+ * precisely so exceptions cannot override them — outrank both. User allowlist
+ * rules sit above all of these at priority 1000.
+ */
+const BLOCK_PRIORITY = 100;
+const EXCEPTION_PRIORITY = 200;
+const DOCUMENT_EXCEPTION_PRIORITY = 300;
+const IMPORTANT_BLOCK_PRIORITY = 400;
+const IMPORTANT_EXCEPTION_PRIORITY = 500;
+const IMPORTANT_DOCUMENT_EXCEPTION_PRIORITY = 600;
+/** `allowAllRequests` is only valid for these resource types. */
+const DOCUMENT_RESOURCE_TYPES = Object.freeze(['main_frame', 'sub_frame']);
+/**
+ * Every non-network separator in the ABP/uBlock/AdGuard dialects:
+ * `##` `#@#` cosmetic, `#?#` `#@?#` procedural, `#%#` `#@%#` scriptlet,
+ * `#$#` `#@$#` `#$?#` `#@$?#` CSS injection.
+ *
+ * These lines must never reach the network compiler. A scriptlet body compiled
+ * as a urlFilter yields a junk rule, and an AdGuard HTML filter (`$$`) would
+ * split at its `$` and block the entire domain.
+ */
+const NON_NETWORK_SEPARATOR = /#@?[?%$]*#/;
+const HTML_FILTER_SEPARATOR = /\$@?\$/;
+// Kept separate: a /g regex carries lastIndex state across .test() calls.
+const NON_ASCII = /[^\x00-\x7F]/;
+const NON_ASCII_GLOBAL = /[^\x00-\x7F]/g;
+/** DNR requires initiator domains to be plain lowercase ASCII hostnames. */
+const VALID_DOMAIN = /^[a-z0-9.-]+$/;
+/** Shortest substring pattern worth compiling; below this a rule overblocks. */
+const MIN_SUBSTRING_FILTER_LENGTH = 4;
+
+/**
+ * Percent-encodes non-ASCII characters so the pattern satisfies DNR's
+ * ASCII-only `urlFilter` requirement while still matching canonicalized URLs.
+ * @param {string} urlFilter
+ * @returns {string}
+ */
+function toAsciiUrlFilter(urlFilter) {
+  if (!NON_ASCII.test(urlFilter)) {
+    return urlFilter;
+  }
+  return urlFilter.replace(NON_ASCII_GLOBAL, (character) => encodeURIComponent(character));
+}
+
+/**
+ * Returns true when every entry is a DNR-acceptable hostname.
+ *
+ * Wildcard and regex domain syntax (`domain=/re/`, `domain=*.foo`) has no DNR
+ * equivalent, and a single malformed entry makes Chrome reject the entire
+ * ruleset it lives in, so such rules are dropped instead.
+ * @param {string[]|undefined} domains
+ * @returns {boolean}
+ */
+function hasValidDomains(domains) {
+  if (!domains) {
+    return true;
+  }
+  return domains.length > 0 && domains.every((domain) => VALID_DOMAIN.test(domain));
+}
 
 let lastCompilerStats = {
   parsed: 0,
+  parsedExceptions: 0,
   skippedComments: 0,
   skippedCosmetic: 0,
   skippedExceptions: 0,
@@ -87,15 +183,47 @@ function normalizeUrlFilter(pattern) {
     return normalized;
   }
 
-  if (normalized.startsWith('*') || normalized.includes('^')) {
-    return normalized.startsWith('||') ? normalized : `||${normalized.replace(/^\|+/, '')}`;
+  // DNR rejects any pattern beginning with `||*`, and a leading wildcard is
+  // already implicit for substring matching, so strip it rather than anchoring.
+  if (normalized.startsWith('*')) {
+    const stripped = normalized.replace(/^\*+/, '');
+    return stripped.length >= MIN_SUBSTRING_FILTER_LENGTH ? stripped : null;
   }
 
-  if (/^[\w.-]+\.[a-z]{2,}/i.test(normalized)) {
-    return `||${normalized.replace(/^\|+/, '')}`;
+  // Only domain-anchor when the pattern really does start with a hostname;
+  // `||` followed by a path fragment would never match anything.
+  if (/^[\w-]+(\.[\w-]+)+/.test(normalized)) {
+    return `||${normalized}`;
+  }
+
+  // Path and keyword fragments such as `/adserver^` match as plain substrings,
+  // which is the semantics the source lists intend for them.
+  if (
+    (normalized.startsWith('/') || normalized.includes('^'))
+    && normalized.length >= MIN_SUBSTRING_FILTER_LENGTH
+  ) {
+    return normalized;
   }
 
   return null;
+}
+
+/**
+ * Returns true when a urlFilter satisfies DNR's pattern grammar.
+ *
+ * `|` is only meaningful at the very start or end of a pattern, and Chrome
+ * rejects the whole ruleset when a rule violates that.
+ * @param {string} urlFilter
+ * @returns {boolean}
+ */
+function isValidUrlFilter(urlFilter) {
+  if (!urlFilter || urlFilter.startsWith('||*')) {
+    return false;
+  }
+  const body = urlFilter
+    .replace(/^(\|\||\|)/, '')
+    .replace(/\|$/, '');
+  return !body.includes('|');
 }
 
 /**
@@ -135,12 +263,13 @@ function parseDomainModifier(modifier) {
  * Applies supported ABP/uBlock modifiers to a DNR condition.
  * @param {{ urlFilter: string, resourceTypes: string[] }} condition
  * @param {string} modifiersText
- * @returns {{ ok: boolean, condition?: { urlFilter: string, resourceTypes: string[], domainType?: string, initiatorDomains?: string[], excludedInitiatorDomains?: string[] } }}
+ * @returns {{ ok: boolean, important?: boolean, condition?: { urlFilter: string, resourceTypes: string[], domainType?: string, initiatorDomains?: string[], excludedInitiatorDomains?: string[] } }}
  */
 function applyModifiers(condition, modifiersText) {
   const includeTypes = new Set();
   const excludeTypes = new Set();
   const nextCondition = { ...condition };
+  let important = false;
 
   for (const rawModifier of modifiersText.split(',')) {
     const modifier = rawModifier.trim();
@@ -152,12 +281,17 @@ function applyModifiers(condition, modifiersText) {
       continue;
     }
 
-    if (modifier === 'third-party') {
+    if (modifier === 'important') {
+      important = true;
+      continue;
+    }
+
+    if (THIRD_PARTY_MODIFIERS.has(modifier)) {
       nextCondition.domainType = 'thirdParty';
       continue;
     }
 
-    if (modifier === '~third-party') {
+    if (FIRST_PARTY_MODIFIERS.has(modifier)) {
       nextCondition.domainType = 'firstParty';
       continue;
     }
@@ -190,7 +324,86 @@ function applyModifiers(condition, modifiersText) {
   }
 
   nextCondition.resourceTypes = finalTypes;
-  return { ok: true, condition: nextCondition };
+  return { ok: true, important, condition: nextCondition };
+}
+
+/**
+ * Builds the DNR rule for an `@@` exception line.
+ *
+ * Exceptions are what keep filter lists from breaking payment flows, logins, and
+ * CDNs shared between ads and site assets, so they map to `allow` rules that
+ * outrank the block rules they override. `$document`/`$all` exceptions become
+ * `allowAllRequests`, which lifts blocking for the page and everything in it.
+ * @param {string} pattern
+ * @param {string} modifiersText
+ * @returns {{ priority: number, action: object, condition: object }|null}
+ */
+function buildExceptionRule(pattern, modifiersText) {
+  const urlFilter = normalizeUrlFilter(pattern);
+  if (!urlFilter) {
+    return null;
+  }
+
+  const modifiers = modifiersText
+    .split(',')
+    .map((modifier) => modifier.trim())
+    .filter(Boolean);
+  const networkModifiers = [];
+  let isDocumentException = false;
+  let sawNonNetworkModifier = false;
+  let isImportant = false;
+
+  for (const modifier of modifiers) {
+    if (modifier === 'important') {
+      isImportant = true;
+      continue;
+    }
+
+    if (DOCUMENT_EXCEPTION_MODIFIERS.has(modifier)) {
+      isDocumentException = true;
+      continue;
+    }
+    // `stealth` also appears as `stealth=value`.
+    if (NON_NETWORK_EXCEPTION_MODIFIERS.has(modifier) || modifier.startsWith('stealth=')) {
+      sawNonNetworkModifier = true;
+      continue;
+    }
+    networkModifiers.push(modifier);
+  }
+
+  if (isDocumentException) {
+    const condition = { urlFilter, resourceTypes: [...DOCUMENT_RESOURCE_TYPES] };
+    for (const modifier of networkModifiers) {
+      if (modifier.startsWith('domain=')) {
+        Object.assign(condition, parseDomainModifier(modifier));
+      }
+    }
+    return {
+      priority: isImportant ? IMPORTANT_DOCUMENT_EXCEPTION_PRIORITY : DOCUMENT_EXCEPTION_PRIORITY,
+      action: { type: 'allowAllRequests' },
+      condition,
+    };
+  }
+
+  // Nothing left to express: the line only disabled cosmetic filtering.
+  if (!networkModifiers.length && sawNonNetworkModifier) {
+    return null;
+  }
+
+  let condition = { urlFilter, resourceTypes: [...DEFAULT_RESOURCE_TYPES] };
+  if (networkModifiers.length) {
+    const result = applyModifiers(condition, networkModifiers.join(','));
+    if (!result.ok || !result.condition) {
+      return null;
+    }
+    condition = result.condition;
+  }
+
+  return {
+    priority: isImportant ? IMPORTANT_EXCEPTION_PRIORITY : EXCEPTION_PRIORITY,
+    action: { type: 'allow' },
+    condition,
+  };
 }
 
 /**
@@ -201,6 +414,7 @@ function applyModifiers(condition, modifiersText) {
 export function parseFilterList(text) {
   const stats = {
     parsed: 0,
+    parsedExceptions: 0,
     skippedComments: 0,
     skippedCosmetic: 0,
     skippedExceptions: 0,
@@ -219,51 +433,79 @@ export function parseFilterList(text) {
       continue;
     }
 
-    if (line.startsWith('@@')) {
-      stats.skippedExceptions += 1;
-      continue;
-    }
-
-    if (line.includes('##') || line.includes('#?#')) {
+    if (NON_NETWORK_SEPARATOR.test(line) || HTML_FILTER_SEPARATOR.test(line)) {
       stats.skippedCosmetic += 1;
       continue;
     }
 
-    if (/^\/.*\/$/.test(line)) {
+    const isException = line.startsWith('@@');
+    const body = isException ? line.slice(2) : line;
+
+    if (/^\/.*\/$/.test(body)) {
       stats.skippedRegex += 1;
       continue;
     }
 
-    const modifierIndex = line.indexOf('$');
-    const pattern = modifierIndex === -1 ? line : line.slice(0, modifierIndex);
-    const modifiers = modifierIndex === -1 ? '' : line.slice(modifierIndex + 1);
-    const urlFilter = normalizeUrlFilter(pattern);
+    const modifierIndex = body.indexOf('$');
+    const pattern = modifierIndex === -1 ? body : body.slice(0, modifierIndex);
+    const modifiers = modifierIndex === -1 ? '' : body.slice(modifierIndex + 1);
+    let rule;
 
-    if (!urlFilter) {
+    if (isException) {
+      rule = buildExceptionRule(pattern, modifiers);
+      if (!rule) {
+        stats.skippedExceptions += 1;
+        continue;
+      }
+    } else {
+      const urlFilter = normalizeUrlFilter(pattern);
+      if (!urlFilter) {
+        stats.skippedUnsupported += 1;
+        continue;
+      }
+
+      let condition = {
+        urlFilter,
+        resourceTypes: [...DEFAULT_RESOURCE_TYPES],
+      };
+      let important = false;
+
+      if (modifiers) {
+        const result = applyModifiers(condition, modifiers);
+        if (!result.ok || !result.condition) {
+          stats.skippedUnknownModifiers += 1;
+          continue;
+        }
+        condition = result.condition;
+        important = result.important === true;
+      }
+
+      rule = {
+        priority: important ? IMPORTANT_BLOCK_PRIORITY : BLOCK_PRIORITY,
+        action: { type: 'block' },
+        condition,
+      };
+    }
+
+    rule.condition.urlFilter = toAsciiUrlFilter(rule.condition.urlFilter);
+
+    // A single malformed condition makes Chrome reject the whole ruleset, so
+    // anything that survived parsing but can't be represented is dropped here.
+    if (
+      NON_ASCII.test(rule.condition.urlFilter)
+      || !isValidUrlFilter(rule.condition.urlFilter)
+      || !hasValidDomains(rule.condition.initiatorDomains)
+      || !hasValidDomains(rule.condition.excludedInitiatorDomains)
+    ) {
       stats.skippedUnsupported += 1;
       continue;
     }
 
-    let condition = {
-      urlFilter,
-      resourceTypes: [...DEFAULT_RESOURCE_TYPES],
-    };
-
-    if (modifiers) {
-      const result = applyModifiers(condition, modifiers);
-      if (!result.ok || !result.condition) {
-        stats.skippedUnknownModifiers += 1;
-        continue;
-      }
-      condition = result.condition;
-    }
-
-    parsedRules.push({
-      priority: 100,
-      action: { type: 'block' },
-      condition,
-    });
+    parsedRules.push(rule);
     stats.parsed += 1;
+    if (isException) {
+      stats.parsedExceptions += 1;
+    }
   }
 
   lastCompilerStats = stats;
@@ -282,7 +524,14 @@ export function compileRules(parsedRules, startId) {
   let nextId = startId;
 
   for (const rule of parsedRules) {
+    const action = rule.action ?? { type: 'block' };
+    const priority = rule.priority ?? 100;
+    // Action and priority belong in the key: a block and the exception that
+    // overrides it share a condition, and collapsing them would silently drop
+    // the exception.
     const key = JSON.stringify({
+      action: action.type,
+      priority,
       urlFilter: rule.condition.urlFilter,
       resourceTypes: [...rule.condition.resourceTypes].sort(),
       domainType: rule.condition.domainType ?? '',
@@ -302,8 +551,8 @@ export function compileRules(parsedRules, startId) {
 
     const compiledRule = {
       id: nextId,
-      priority: rule.priority ?? 100,
-      action: { type: 'block' },
+      priority,
+      action: { ...action },
       condition: { ...rule.condition, resourceTypes: [...rule.condition.resourceTypes] },
     };
 
@@ -315,15 +564,3 @@ export function compileRules(parsedRules, startId) {
   return compiledRules;
 }
 
-/**
- * Splits a compiled rule array into 29,500-rule chunks.
- * @param {Array<{ id: number, priority: number, action: { type: 'block' }, condition: object }>} allRules
- * @returns {Array<Array<{ id: number, priority: number, action: { type: 'block' }, condition: object }>>}
- */
-export function splitRulesets(allRules) {
-  const chunks = [];
-  for (let index = 0; index < allRules.length; index += MAX_RULESET_CHUNK) {
-    chunks.push(allRules.slice(index, index + MAX_RULESET_CHUNK));
-  }
-  return chunks;
-}

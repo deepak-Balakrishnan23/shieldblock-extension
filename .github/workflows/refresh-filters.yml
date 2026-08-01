@@ -1,0 +1,37 @@
+name: Refresh filter rules
+
+# The packaged rulesets are a point-in-time compile of the upstream lists, so
+# they need a periodic rebuild. This opens a PR rather than pushing, keeping the
+# diff reviewable and the ruleset regeneration out of every feature branch.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 1 * *'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Rebuild rulesets from upstream lists
+        run: npm run build:rules
+
+      - name: Open pull request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/refresh-filter-rules
+          title: 'chore: refresh packaged filter rules'
+          commit-message: 'chore: refresh packaged filter rules'
+          body: |
+            Regenerated `rules/generated/` from the upstream filter lists via
+            `npm run build:rules`. Ruleset validation passed as part of the build.

@@ -3,37 +3,41 @@ import {
   getCompilerStats,
   parseFilterList,
 } from './filter-compiler.js';
+import {
+  CURATED_RULE_COUNT,
+  GENERATED_BUILT_AT,
+  GENERATED_CORE_RULESETS,
+  GENERATED_EXCEPTION_RULESETS,
+  GENERATED_EXTENDED_RULESETS,
+  GENERATED_RULE_COUNTS,
+} from './rules/generated/index.js';
 
-const STATIC_RULESET_IDS = ['ads-core', 'trackers', 'annoyances', 'youtube', 'security'];
+const CURATED_RULESET_IDS = ['ads-core', 'trackers', 'annoyances', 'youtube', 'security'];
+// Curated rulesets, the `@@` exception rules, and the generated core tier.
+// Together these fit Chrome's guaranteed static-rule budget, so enabling them
+// can never fail. Exceptions belong here rather than in the best-effort tier:
+// they exist to override block rules, and a block that outlives its exception
+// breaks logins, checkouts, and CDNs shared between ads and site assets.
+const BASE_STATIC_RULESET_IDS = [
+  ...CURATED_RULESET_IDS,
+  ...GENERATED_EXCEPTION_RULESETS,
+  ...GENERATED_CORE_RULESETS,
+];
+const ALL_STATIC_RULESET_IDS = [...BASE_STATIC_RULESET_IDS, ...GENERATED_EXTENDED_RULESETS];
 const FILTER_UPDATE_ALARM = 'filterUpdate';
 const FETCH_TIMEOUT_MS = 20000;
 const FILTER_PARSE_CHUNK_SIZE = 4000;
-const ADS_CORE_DYNAMIC_BUDGET = 3000;
-const TRACKERS_DYNAMIC_BUDGET = 1000;
+// Chrome caps dynamic + session rules at 5,000 combined. These budgets stay
+// under that with headroom, because dynamic slots are now a freshness
+// supplement over the packaged static rulesets rather than the whole engine.
+const ADS_CORE_DYNAMIC_BUDGET = 2500;
+const TRACKERS_DYNAMIC_BUDGET = 800;
 const CUSTOM_DYNAMIC_BUDGET = 500;
 const ALLOWLIST_DYNAMIC_BUDGET = 500;
 const ADS_CORE_START_ID = 1;
 const TRACKERS_START_ID = 200000;
 const CUSTOM_RULES_START_ID = 260000;
 const ALLOWLIST_RULE_START_ID = 280000;
-const FALLBACK_RULE_COUNT = 130;
-const ALL_RESOURCE_TYPES = Object.freeze([
-  'script',
-  'image',
-  'stylesheet',
-  'object',
-  'xmlhttprequest',
-  'ping',
-  'csp_report',
-  'media',
-  'websocket',
-  'webtransport',
-  'webbundle',
-  'other',
-  'main_frame',
-  'sub_frame',
-  'font',
-]);
 const FILTER_LISTS = Object.freeze([
   {
     name: 'EasyList',
@@ -71,10 +75,14 @@ const STORAGE_DEFAULTS = {
   enabled: true,
   installedAt: 0,
   lastUpdated: 0,
-  ruleCount: FALLBACK_RULE_COUNT,
+  ruleCount: CURATED_RULE_COUNT,
   filterListStatus: [],
   filterListConfig: { ...DEFAULT_FILTER_LIST_CONFIG },
   debug: false,
+  // Off by default: the packaged static rulesets are compiled from these same
+  // lists at build time, so scheduled re-fetching would spend the scarce dynamic
+  // quota re-adding rules that are already active. Manual refresh still works.
+  liveFilterUpdates: false,
   sponsorBlockEnabled: true,
   blockedCount: 0,
   adsBlocked: 0,
@@ -92,6 +100,22 @@ const STORAGE_DEFAULTS = {
   allowlistedDomains: [],
   allowlistRules: [],
 };
+/** Accepted stat names from content scripts, mapped to their storage key. */
+const STAT_KEY_ALIASES = Object.freeze({
+  ads: 'adsBlocked',
+  adsBlocked: 'adsBlocked',
+  trackers: 'trackersBlocked',
+  tracker: 'trackersBlocked',
+  trackersBlocked: 'trackersBlocked',
+  cosmetic: 'cosmeticBlocked',
+  cosmeticBlocked: 'cosmeticBlocked',
+  heuristic: 'heuristicBlocked',
+  heuristicBlocked: 'heuristicBlocked',
+  ml: 'mlBlocked',
+  mlBlocked: 'mlBlocked',
+  phishing: 'phishingBlocked',
+  phishingBlocked: 'phishingBlocked',
+});
 const DAILY_STAT_KEYS = Object.freeze({
   adsBlocked: 'ads',
   trackersBlocked: 'trackers',
@@ -276,10 +300,11 @@ async function getState() {
     enabled: stored.enabled !== false,
     installedAt: Number.isFinite(stored.installedAt) ? stored.installedAt : 0,
     lastUpdated: Number.isFinite(stored.lastUpdated) ? stored.lastUpdated : 0,
-    ruleCount: Number.isFinite(stored.ruleCount) ? stored.ruleCount : FALLBACK_RULE_COUNT,
+    ruleCount: Number.isFinite(stored.ruleCount) ? stored.ruleCount : CURATED_RULE_COUNT,
     filterListStatus: Array.isArray(stored.filterListStatus) ? stored.filterListStatus : [],
     filterListConfig: sanitizeFilterListConfig(stored.filterListConfig),
     debug: stored.debug === true,
+    liveFilterUpdates: stored.liveFilterUpdates === true,
     sponsorBlockEnabled: stored.sponsorBlockEnabled !== false,
     blockedCount: Number.isFinite(stored.blockedCount) ? stored.blockedCount : 0,
     adsBlocked: Number.isFinite(stored.adsBlocked) ? stored.adsBlocked : 0,
@@ -333,15 +358,79 @@ function computeRuleCount(state) {
 }
 
 /**
+ * Enables as much of the generated extended tier as the shared static-rule pool
+ * allows.
+ *
+ * Extended rulesets draw from Chrome's global static-rule limit, which is shared
+ * with every other installed extension, so the full set may not fit.
+ * `updateEnabledRulesets` is atomic — an over-quota call applies nothing — so on
+ * failure we retry with progressively smaller prefixes instead of giving up.
+ * @returns {Promise<number>} Count of extended rulesets successfully enabled.
+ */
+async function enableExtendedRulesets() {
+  const ids = [...GENERATED_EXTENDED_RULESETS];
+
+  for (let count = ids.length; count > 0; count = Math.floor(count / 2)) {
+    try {
+      await chrome.declarativeNetRequest.updateEnabledRulesets({
+        enableRulesetIds: ids.slice(0, count),
+        disableRulesetIds: ids.slice(count),
+      });
+      if (count < ids.length) {
+        logger.info('Extended ruleset tier partially enabled', { enabled: count, total: ids.length });
+      }
+      return count;
+    } catch (error) {
+      await logger.debug('Extended ruleset tier did not fit; backing off', { attempted: count, error });
+    }
+  }
+
+  try {
+    await chrome.declarativeNetRequest.updateEnabledRulesets({ disableRulesetIds: ids });
+  } catch (error) {
+    logger.error('Failed to disable extended rulesets', error);
+  }
+  logger.error('No extended rulesets could be enabled; core tier still active');
+  return 0;
+}
+
+/**
  * Applies the enabled state to packaged static rulesets.
  * @param {boolean} enabled
  * @returns {Promise<void>}
  */
 async function applyStaticRulesetState(enabled) {
+  if (!enabled) {
+    await chrome.declarativeNetRequest.updateEnabledRulesets({
+      disableRulesetIds: [...ALL_STATIC_RULESET_IDS],
+    });
+    return;
+  }
+
   await chrome.declarativeNetRequest.updateEnabledRulesets({
-    enableRulesetIds: enabled ? [...STATIC_RULESET_IDS] : [],
-    disableRulesetIds: enabled ? [] : [...STATIC_RULESET_IDS],
+    enableRulesetIds: [...BASE_STATIC_RULESET_IDS],
   });
+  await enableExtendedRulesets();
+}
+
+/**
+ * Counts the rules carried by the currently enabled static rulesets.
+ * @returns {Promise<number>}
+ */
+async function computeStaticRuleCount() {
+  try {
+    const enabledRulesets = await chrome.declarativeNetRequest.getEnabledRulesets();
+    let total = 0;
+    for (const rulesetId of enabledRulesets) {
+      total += GENERATED_RULE_COUNTS[rulesetId] ?? 0;
+    }
+    if (enabledRulesets.some((rulesetId) => CURATED_RULESET_IDS.includes(rulesetId))) {
+      total += CURATED_RULE_COUNT;
+    }
+    return total;
+  } catch {
+    return 0;
+  }
 }
 
 /**
@@ -380,11 +469,18 @@ function buildAllowlistRules(domains) {
     .slice(0, ALLOWLIST_DYNAMIC_BUDGET)
     .map((domain, index) => ({
       id: ALLOWLIST_RULE_START_ID + index,
+      // Above every generated rule, including `$important` blocks: an explicit
+      // user allowlist entry is the strongest signal there is.
       priority: 1000,
-      action: { type: 'allow' },
+      // `allowAllRequests` on the navigation itself is what actually allowlists
+      // a site. A plain `allow` keyed on requestDomains would only permit
+      // requests *to* the allowlisted domain, leaving third-party ads and
+      // trackers on that page still blocked — which is not what allowlisting a
+      // site means.
+      action: { type: 'allowAllRequests' },
       condition: {
         requestDomains: [domain],
-        resourceTypes: [...ALL_RESOURCE_TYPES],
+        resourceTypes: ['main_frame', 'sub_frame'],
       },
     }));
 }
@@ -501,6 +597,7 @@ async function yieldToServiceWorker() {
 function mergeCompilerStats(target, source) {
   return {
     parsed: target.parsed + source.parsed,
+    parsedExceptions: target.parsedExceptions + source.parsedExceptions,
     skippedComments: target.skippedComments + source.skippedComments,
     skippedCosmetic: target.skippedCosmetic + source.skippedCosmetic,
     skippedExceptions: target.skippedExceptions + source.skippedExceptions,
@@ -522,6 +619,7 @@ async function parseFilterListChunked(text) {
   const parsedRules = [];
   let aggregateStats = {
     parsed: 0,
+    parsedExceptions: 0,
     skippedComments: 0,
     skippedCosmetic: 0,
     skippedExceptions: 0,
@@ -656,6 +754,7 @@ async function buildStatsResponse() {
   const state = await getState();
   const currentDomain = await resolveCurrentDomain();
   const today = resolveTodayStats(state.dailyStats);
+  const staticRuleCount = state.enabled ? await computeStaticRuleCount() : 0;
   return {
     enabled: state.enabled,
     blockedCount: state.blockedCount,
@@ -670,7 +769,12 @@ async function buildStatsResponse() {
     todayHeuristic: today.heuristic,
     todayMl: today.ml,
     todayPhishing: today.phishing,
-    ruleCount: state.ruleCount,
+    // Packaged static rules now carry the bulk of network coverage; dynamic
+    // rules hold only the live-update supplement, custom rules, and allowlist.
+    staticRuleCount,
+    dynamicRuleCount: computeRuleCount(state),
+    ruleCount: staticRuleCount + computeRuleCount(state),
+    rulesBuiltAt: GENERATED_BUILT_AT,
     lastUpdated: state.lastUpdated,
     currentDomain,
     isCurrentSiteAllowlisted: currentDomain
@@ -694,6 +798,7 @@ async function buildSettingsResponse() {
     customRulesText: state.customRuleLines.join('\n'),
     allowlistedDomains: state.allowlistedDomains,
     sponsorBlockEnabled: state.sponsorBlockEnabled,
+    liveFilterUpdates: state.liveFilterUpdates,
   };
 }
 
@@ -803,7 +908,7 @@ async function fetchAndCompileFilters() {
   if (!anyFetchSucceeded && enabledListCount > 0 && compiledAdsRules.length === 0 && compiledTrackerRules.length === 0) {
     await chrome.storage.local.set({
       filterListStatus,
-      ruleCount: FALLBACK_RULE_COUNT + state.customDynamicRules.length,
+      ruleCount: CURATED_RULE_COUNT + state.customDynamicRules.length,
     });
     logger.error('All filter list fetches failed; packaged fallback rules remain active');
     return buildStatsResponse();
@@ -913,48 +1018,49 @@ async function removeAllowlistedDomain(domain) {
 }
 
 /**
- * Increments one of the persisted stats counters.
- * @param {string} stat
+ * Applies a batch of counter increments in a single storage round trip.
+ *
+ * Content scripts report blocked elements and requests in batches, so this reads
+ * only the counter keys rather than the full state — a plain `getState()` here
+ * would pull the compiled rule arrays into memory for every batch.
+ * @param {Record<string, number>} deltas
  * @returns {Promise<object>}
  */
-async function incrementStat(stat) {
-  const state = await getState();
-  const statMap = {
-    ads: 'adsBlocked',
-    adsBlocked: 'adsBlocked',
-    trackers: 'trackersBlocked',
-    tracker: 'trackersBlocked',
-    trackersBlocked: 'trackersBlocked',
-    cosmetic: 'cosmeticBlocked',
-    cosmeticBlocked: 'cosmeticBlocked',
-    heuristic: 'heuristicBlocked',
-    heuristicBlocked: 'heuristicBlocked',
-    ml: 'mlBlocked',
-    mlBlocked: 'mlBlocked',
-    phishing: 'phishingBlocked',
-    phishingBlocked: 'phishingBlocked',
-  };
-  const key = statMap[String(stat || '').trim()];
-  if (!key) {
+async function applyStatDeltas(deltas) {
+  const resolved = new Map();
+
+  for (const [rawStat, rawCount] of Object.entries(deltas || {})) {
+    const key = STAT_KEY_ALIASES[String(rawStat || '').trim()];
+    const count = Number(rawCount);
+    if (!key || !Number.isFinite(count) || count <= 0) {
+      continue;
+    }
+    resolved.set(key, (resolved.get(key) || 0) + Math.floor(count));
+  }
+
+  if (!resolved.size) {
     return { ok: false };
   }
 
-  const nextValue = state[key] + 1;
-  const payload = {
-    [key]: nextValue,
-  };
-  if (key === 'adsBlocked') {
-    payload.blockedCount = nextValue;
-  }
+  const stored = await chrome.storage.local.get([...COUNTER_STORAGE_KEYS, 'dailyStats']);
+  const today = resolveTodayStats(sanitizeDailyStats(stored.dailyStats));
+  const payload = { dailyStats: today };
 
-  const dailyField = DAILY_STAT_KEYS[key];
-  if (dailyField) {
-    const today = resolveTodayStats(state.dailyStats);
-    payload.dailyStats = { ...today, [dailyField]: (today[dailyField] || 0) + 1 };
+  for (const [key, count] of resolved) {
+    const current = Number.isFinite(stored[key]) ? stored[key] : 0;
+    payload[key] = current + count;
+    if (key === 'adsBlocked') {
+      payload.blockedCount = payload[key];
+    }
+
+    const dailyField = DAILY_STAT_KEYS[key];
+    if (dailyField) {
+      today[dailyField] = (today[dailyField] || 0) + count;
+    }
   }
 
   await chrome.storage.local.set(payload);
-  return { ok: true, value: nextValue };
+  return { ok: true };
 }
 
 /**
@@ -1019,6 +1125,31 @@ async function setSponsorBlock(enabled) {
 }
 
 /**
+ * Enables or disables scheduled live filter-list downloads.
+ *
+ * When disabled the packaged static rulesets are the only network layer and the
+ * whole dynamic quota stays available for custom rules and the allowlist.
+ * @param {boolean} enabled
+ * @returns {Promise<object>}
+ */
+async function setLiveFilterUpdates(enabled) {
+  const nextEnabled = Boolean(enabled);
+  await chrome.storage.local.set({ liveFilterUpdates: nextEnabled });
+
+  if (nextEnabled) {
+    await fetchAndCompileFilters();
+    return buildSettingsResponse();
+  }
+
+  await chrome.storage.local.set({
+    'compiledRules_ads-core': [],
+    'compiledRules_trackers': [],
+  });
+  await reconcileRulesetState();
+  return buildSettingsResponse();
+}
+
+/**
  * Imports a JSON settings payload and rebuilds derived state.
  * @param {Record<string, unknown>} payload
  * @returns {Promise<object>}
@@ -1042,6 +1173,7 @@ async function importSettings(payload) {
     filterListStatus: currentState.filterListStatus,
     filterListConfig: sanitizeFilterListConfig(payload?.filterListConfig ?? currentState.filterListConfig),
     debug: payload?.debug === true,
+    liveFilterUpdates: payload?.liveFilterUpdates === true,
     sponsorBlockEnabled: payload?.sponsorBlockEnabled !== false,
     blockedCount: Number.isFinite(payload?.blockedCount) ? payload.blockedCount : (Number.isFinite(payload?.adsBlocked) ? payload.adsBlocked : 0),
     adsBlocked: Number.isFinite(payload?.adsBlocked) ? payload.adsBlocked : 0,
@@ -1061,7 +1193,9 @@ async function importSettings(payload) {
 
   await chrome.storage.local.set(nextState);
   await reconcileRulesetState();
-  await fetchAndCompileFilters();
+  if (nextState.liveFilterUpdates) {
+    await fetchAndCompileFilters();
+  }
   await broadcastPageRuleRefresh();
   return buildSettingsResponse();
 }
@@ -1078,7 +1212,9 @@ async function resetToDefaults() {
   };
   await chrome.storage.local.set(defaults);
   await reconcileRulesetState();
-  await fetchAndCompileFilters();
+  if (defaults.liveFilterUpdates) {
+    await fetchAndCompileFilters();
+  }
   await broadcastPageRuleRefresh();
   return buildSettingsResponse();
 }
@@ -1100,6 +1236,7 @@ async function initializeOnInstall() {
       filterListStatus: current.filterListStatus,
       filterListConfig: current.filterListConfig,
       debug: current.debug,
+      liveFilterUpdates: current.liveFilterUpdates,
       blockedCount: current.blockedCount,
       adsBlocked: current.adsBlocked,
       trackersBlocked: current.trackersBlocked,
@@ -1119,7 +1256,9 @@ async function initializeOnInstall() {
     await applyStaticRulesetState(current.enabled);
     await ensureAlarms();
     logger.info('ShieldBlock AI v3 installed');
-    await fetchAndCompileFilters();
+    if (current.liveFilterUpdates) {
+      await fetchAndCompileFilters();
+    }
   } catch (error) {
     logger.error('Install initialization failed', error);
   }
@@ -1144,9 +1283,16 @@ chrome.runtime.onStartup.addListener(() => {
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === FILTER_UPDATE_ALARM) {
-    void fetchAndCompileFilters();
+  if (alarm.name !== FILTER_UPDATE_ALARM) {
+    return;
   }
+  void (async () => {
+    const state = await getState();
+    if (!state.liveFilterUpdates) {
+      return;
+    }
+    await fetchAndCompileFilters();
+  })();
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -1230,8 +1376,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
 
+      if (message?.action === 'incrementStats') {
+        sendResponse(await applyStatDeltas(message.counts));
+        return;
+      }
+
+      // Retained so a content script from a previous version still records
+      // stats until its tab is reloaded after an update.
       if (message?.action === 'incrementStat') {
-        sendResponse(await incrementStat(message.stat));
+        sendResponse(await applyStatDeltas({ [message.stat]: 1 }));
         return;
       }
 
@@ -1252,6 +1405,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       if (message?.action === 'setSponsorBlock') {
         sendResponse(await setSponsorBlock(Boolean(message.enabled)));
+        return;
+      }
+
+      if (message?.action === 'setLiveFilterUpdates') {
+        sendResponse(await setLiveFilterUpdates(Boolean(message.enabled)));
         return;
       }
 

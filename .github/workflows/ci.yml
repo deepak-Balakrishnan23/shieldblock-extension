@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  build-test:
+  validate:
     runs-on: ubuntu-latest
 
     steps:
@@ -14,37 +14,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: shieldblock-extension/package-lock.json
 
-      - name: Install dependencies
-        working-directory: shieldblock-extension
-        run: npm ci
-
-      - name: Lint
-        working-directory: shieldblock-extension
-        run: npm run lint
-
-      - name: Typecheck
-        working-directory: shieldblock-extension
-        run: npm run typecheck
+      - name: Syntax check
+        run: |
+          for file in *.js scriptlets/*.js rules/generated/index.js; do
+            node --check "$file"
+          done
 
       - name: Unit tests
-        working-directory: shieldblock-extension
         run: npm test
 
-      - name: Build extension
-        working-directory: shieldblock-extension
-        run: npm run build
-
-      - name: Upload Chrome build
-        uses: actions/upload-artifact@v4
-        with:
-          name: shieldblock-chrome
-          path: shieldblock-extension/dist/chrome
-
-      - name: Upload Firefox build
-        uses: actions/upload-artifact@v4
-        with:
-          name: shieldblock-firefox
-          path: shieldblock-extension/dist/firefox
+      # Chrome rejects an entire ruleset file when a single rule inside it is
+      # malformed, so the packaged rules are checked against its documented
+      # limits on every push rather than at install time on a user's machine.
+      - name: Validate packaged rulesets
+        run: npm run validate:rules

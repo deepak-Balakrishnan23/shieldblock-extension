@@ -140,22 +140,50 @@
     'iframe[src*="googlesyndication"]',
     'iframe[src*="adnxs"]',
   ]);
-  const GENERIC_COSMETICS = Object.freeze(Array.from(new Set([
-    ...GENERIC_CLASS_NAMES.flatMap((className) => [
+  /**
+   * Expands a generic class token into the selector shapes it contributes.
+   * @param {string} className
+   * @returns {string[]}
+   */
+  function classSelectorsFor(className) {
+    return [
       `.${className}`,
       `[class~="${className}"]`,
       `[class^="${className}-"]`,
       `[class*=" ${className}-"]`,
-    ]),
-    ...GENERIC_ID_NAMES.flatMap((idName) => [
+    ];
+  }
+
+  /**
+   * Expands a generic id token into the selector shapes it contributes.
+   * @param {string} idName
+   * @returns {string[]}
+   */
+  function idSelectorsFor(idName) {
+    return [
       `#${idName}`,
       `[id="${idName}"]`,
       `[id^="${idName}-"]`,
       `[id*="-${idName}"]`,
-    ]),
+    ];
+  }
+
+  const GENERIC_COSMETICS = Object.freeze(Array.from(new Set([
+    ...GENERIC_CLASS_NAMES.flatMap(classSelectorsFor),
+    ...GENERIC_ID_NAMES.flatMap(idSelectorsFor),
     ...GENERIC_ATTRIBUTE_SELECTORS,
     ...IFRAME_PATTERNS,
   ])));
+  // Some web apps ship obfuscated class names that collide with the generic ad
+  // tokens above. Gmail wraps every message in <div class="adn ads">, so the
+  // generic `.ads` rule hides the entire conversation body. Drop only the
+  // colliding tokens on those hosts rather than disabling generic cosmetics.
+  const GENERIC_TOKEN_EXCEPTIONS = Object.freeze({
+    'mail.google.com': Object.freeze({
+      classNames: Object.freeze(['ad', 'ads']),
+      idNames: Object.freeze(['ad', 'ads']),
+    }),
+  });
   const DOMAIN_COSMETICS = Object.freeze({
     'youtube.com': Object.freeze([
       /* --- Video player ad elements --- */
@@ -473,6 +501,35 @@
   }
 
   /**
+   * Returns the generic selectors that must not run on the current hostname.
+   * @param {string} hostname
+   * @returns {Set<string>}
+   */
+  function getExceptedGenericSelectors(hostname) {
+    const excepted = new Set();
+
+    for (const [domain, tokens] of Object.entries(GENERIC_TOKEN_EXCEPTIONS)) {
+      if (hostname !== domain && !hostname.endsWith(`.${domain}`)) {
+        continue;
+      }
+
+      for (const className of tokens.classNames) {
+        for (const selector of classSelectorsFor(className)) {
+          excepted.add(selector);
+        }
+      }
+
+      for (const idName of tokens.idNames) {
+        for (const selector of idSelectorsFor(idName)) {
+          excepted.add(selector);
+        }
+      }
+    }
+
+    return excepted;
+  }
+
+  /**
    * Injects the global generic cosmetic stylesheet.
    * @returns {void}
    */
@@ -480,7 +537,12 @@
     if (currentPageAllowlisted || isYouTubeSurface() || !protectionEnabled) {
       return;
     }
-    const cssText = buildCssRule(GENERIC_COSMETICS);
+    const hostname = location.hostname.replace(/^www\./, '').toLowerCase();
+    const excepted = getExceptedGenericSelectors(hostname);
+    const selectors = excepted.size === 0
+      ? GENERIC_COSMETICS
+      : GENERIC_COSMETICS.filter((selector) => !excepted.has(selector));
+    const cssText = buildCssRule(selectors);
     if (cssText) {
       upsertStyle(GENERIC_STYLE_ID, cssText);
     }

@@ -10,7 +10,7 @@ Build the assets with `npm run package` and `npm run screenshots`.
 | Name | ShieldBlock AI |
 | Category | **Privacy & Security** |
 | Language | **English (United States)** |
-| Package | `dist/shieldblock-ai-v3.0.0.zip` |
+| Package | `dist/shieldblock-ai-v3.0.1.zip` |
 | Store icon | `icons/icon128.png` (128×128 PNG) |
 | Screenshots | `dist/store/screenshot-1..5.png` (1280×800, 24-bit PNG) |
 | Privacy policy | Host `PRIVACY_POLICY.md` at a public URL and link it — required, because the extension requests host permissions |

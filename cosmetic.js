@@ -263,6 +263,27 @@
       'ytd-rich-item-renderer:has(ytd-display-ad-renderer)',
       'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"]',
       'ytm-promoted-sparkles-web-renderer',
+
+      /* --- Renderers the JSON prune targets, hidden here as a backstop for
+             payloads that reach the DOM before the scriptlet sees them --- */
+      'ytd-carousel-ad-renderer',
+      'ytd-video-masthead-ad-v3-renderer',
+      'ytd-video-masthead-ad-advertiser-info-renderer',
+      'ytd-player-legacy-desktop-watch-ads-renderer',
+      'ytd-ad-inline-playback-meta-block',
+      'ytd-compact-promoted-video-renderer',
+      'ytd-rich-item-renderer:has(ytd-in-feed-ad-layout-renderer)',
+      'ytd-rich-section-renderer:has(ytd-statement-banner-renderer)',
+      'ytd-rich-section-renderer:has(ytd-brand-video-shelf-renderer)',
+
+      /* --- Shorts --- */
+      'ytd-reel-video-renderer:has(ytd-ad-slot-renderer)',
+      'ytm-promoted-video-renderer',
+      'ytm-companion-slot',
+
+      /* --- Player promos that are not part of the video --- */
+      '.ytp-suggested-action',
+      '.ytp-paid-content-overlay',
     ]),
     'facebook.com': Object.freeze([
       '[data-pagelet*="ad"]',

@@ -109,6 +109,53 @@ refresh still works from the popup's refresh button or the options page's
 **Fetch now**, and the scheduled layer can be enabled by sending the background
 worker `{ action: 'setLiveFilterUpdates', enabled: true }`.
 
+## YouTube Ads
+
+YouTube in-stream ads cannot be blocked at the network layer: the ad and the
+video you asked for are served from the same `googlevideo.com` hosts, over the
+same URLs, and a filter wide enough to catch one kills the other. The rules in
+`rules/youtube-network.json` therefore only cover the surrounding ad
+infrastructure — measurement beacons, the IMA SDK, DoubleClick and
+googlesyndication endpoints. The ads themselves are removed in the page, in
+three layers that back each other up.
+
+**1. Payload pruning (`scriptlets/yt-player.js`, MAIN world, `document_start`).**
+Every ad on YouTube is described in an Innertube JSON payload before it is
+played or rendered: the watch page's ad schedule (`adPlacements`, `playerAds`,
+`adSlots`, `adBreakHeartbeatParams`), and the feed, search, and Shorts ad
+renderers (`adSlotRenderer`, `displayAdRenderer`, `promotedSparklesWebRenderer`,
+and the rest). One walk removes all of them, and then drops the array entries
+those deletions emptied out — otherwise the feed renders a blank slot where the
+ad was. Payload branches that carry the playable video (`streamingData`,
+`videoDetails`, `playabilityStatus`) are never walked.
+
+The walk runs on everything that can carry a payload, because YouTube uses all
+of them: the `ytInitialPlayerResponse` and `ytInitialData` bootstrap globals,
+`fetch` and `XMLHttpRequest` responses for any `/youtubei/` endpoint, and
+`JSON.parse`/`Response.prototype.json` as the catch-all for the code paths the
+transport hooks never observe. The XHR listener is registered from `open()`
+rather than `send()` on purpose: a page attaches its own handler between those
+two calls, and listeners fire in registration order, so registering at send time
+means YouTube reads the response before it has been cleaned.
+
+**2. Player fallback.** When an ad plays anyway — a payload shape we do not know
+yet, or a break requested after the page loaded — the scriptlet mutes it, seeks
+it to its end, and runs the rate up to 16x in case the seek is refused. It only
+does this while `#movie_player` carries `ad-showing`/`ad-interrupting`, since
+seeking on a false positive would throw the viewer to the end of the real video.
+A `MutationObserver` on the player's class list catches the transition
+immediately, with a 200ms loop behind it for states that change no class.
+
+**3. Cosmetic filtering (`cosmetic.js`).** The `youtube.com` selector set hides
+the ad containers and feed renderers that reach the DOM before the scriptlet
+sees their payload. Note that it also hides the skip buttons, so the scriptlet
+clicks them without checking visibility — `HTMLElement.click()` works on a
+hidden element, and requiring visibility made the skip path dead code.
+
+All three layers check `data-shieldblock-enabled` and
+`data-shieldblock-allowlisted` on `<html>`, which `content.js` publishes, so
+pausing protection or allowlisting YouTube turns every one of them off.
+
 ## Add A New Scriptlet
 
 1. Create a new file in `scriptlets/`

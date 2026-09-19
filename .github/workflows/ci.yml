@@ -30,9 +30,17 @@ jobs:
       - name: Validate packaged rulesets
         run: npm run validate:rules
 
+      # Released Google Chrome — which is what the runner ships — no longer
+      # loads an unpacked extension while it is being driven, so it starts
+      # cleanly and every check measures an unprotected page. Plain Chromium
+      # still honours --load-extension, and the runner picks it up ahead of the
+      # system browser.
+      - name: Install a browser that can load unpacked extensions
+        run: npx --yes playwright install chromium
+
       # The YouTube layers cannot be covered by unit tests alone — hook
       # ordering, clicking a control our own CSS hides, and the player fallback
       # are all browser behaviour. This loads the unpacked extension into
-      # headless Chrome against a fixture watch page.
+      # headless Chromium against a fixture watch page.
       - name: YouTube end-to-end checks
         run: npm run test:e2e

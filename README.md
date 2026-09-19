@@ -171,8 +171,15 @@ pointed at with `--host-resolver-rules`, so the page's origin really is
 youtube.com and the host gate opens. HTTPS with a throwaway certificate is not
 optional: youtube.com is HSTS-preloaded, so the page will not load over plain
 HTTP, and a cert error cannot be clicked past — the certificate's public key is
-pinned with `--ignore-certificate-errors-spki-list` instead. It needs `openssl`
-and a Chromium-family browser; set `CHROME_PATH` if it cannot find one.
+pinned with `--ignore-certificate-errors-spki-list` instead.
+
+It needs `openssl` and a browser that still loads an unpacked extension while
+being driven. Released Google Chrome no longer does — it starts cleanly,
+ignores `--load-extension`, and every check then measures an unprotected page —
+so the runner prefers a Chromium installed by `npx playwright install
+chromium`, which is also what CI uses. Set `CHROME_PATH` to override. A browser
+that comes up without the extension fails the run before any check, rather than
+reporting a wall of failures that all have the one cause.
 
 ## Add A New Scriptlet
 

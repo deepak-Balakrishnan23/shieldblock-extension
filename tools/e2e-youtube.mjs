@@ -21,7 +21,7 @@ import { createServer } from 'node:https';
 import { execFile, spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { existsSync, readdirSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -33,15 +33,30 @@ const FIXTURE_PATH = join(REPO_ROOT, 'tests', 'e2e', 'youtube-fixture.html');
 const SERVER_PORT = 8443;
 const PAGE_TIMEOUT_MS = 45000;
 
-/** Chromium-family browsers that can load an unpacked extension headless. */
-const BROWSER_CANDIDATES = [
-  process.env.CHROME_PATH,
-  '/usr/bin/google-chrome',
-  '/usr/bin/google-chrome-stable',
+/**
+ * System browsers to fall back on.
+ *
+ * Only a fallback: released Google Chrome no longer loads an unpacked
+ * extension while it is being driven. Chrome 152 on a CI runner started
+ * cleanly, loaded its own bundled extensions and silently ignored
+ * --load-extension. Plain Chromium builds still honour it, which is why the
+ * Playwright browser below is preferred over anything listed here.
+ */
+const SYSTEM_BROWSER_CANDIDATES = [
   '/usr/bin/chromium',
   '/usr/bin/chromium-browser',
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  '/usr/bin/google-chrome',
+  '/usr/bin/google-chrome-stable',
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+];
+
+/** Where `playwright install chromium` puts its browsers. */
+const PLAYWRIGHT_ROOTS = [
+  process.env.PLAYWRIGHT_BROWSERS_PATH,
+  '/opt/pw-browsers',
+  join(homedir(), '.cache', 'ms-playwright'),
+  join(homedir(), 'Library', 'Caches', 'ms-playwright'),
 ].filter(Boolean);
 
 /** Innertube payloads the fixture requests. */
@@ -80,31 +95,57 @@ function wait(ms) {
 }
 
 /**
- * Finds an installed Chromium-family browser, including the one Playwright
- * ships in the container image.
+ * Finds a Chromium build installed by Playwright.
+ *
+ * `chromium_headless_shell-*` is deliberately not matched: the shell cannot
+ * load extensions at all.
+ * @returns {string | null}
+ */
+function findPlaywrightChromium() {
+  const relativePaths = [
+    ['chrome-linux', 'chrome'],
+    ['chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'],
+  ];
+
+  for (const root of PLAYWRIGHT_ROOTS) {
+    if (!existsSync(root)) continue;
+    for (const entry of readdirSync(root)) {
+      if (!entry.startsWith('chromium-')) continue;
+      for (const relative of relativePaths) {
+        const candidate = join(root, entry, ...relative);
+        if (existsSync(candidate)) {
+          return candidate;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Finds a browser that can be driven with an unpacked extension loaded.
  * @returns {string}
  */
 function resolveBrowser() {
-  for (const candidate of BROWSER_CANDIDATES) {
+  if (process.env.CHROME_PATH) {
+    return process.env.CHROME_PATH;
+  }
+
+  const playwrightChromium = findPlaywrightChromium();
+  if (playwrightChromium) {
+    return playwrightChromium;
+  }
+
+  for (const candidate of SYSTEM_BROWSER_CANDIDATES) {
     if (existsSync(candidate)) {
       return candidate;
     }
   }
 
-  const playwrightRoot = process.env.PLAYWRIGHT_BROWSERS_PATH || '/opt/pw-browsers';
-  if (existsSync(playwrightRoot)) {
-    for (const entry of readdirSync(playwrightRoot)) {
-      // The headless shell cannot load extensions; only full chromium builds.
-      if (!entry.startsWith('chromium-')) continue;
-      const candidate = join(playwrightRoot, entry, 'chrome-linux', 'chrome');
-      if (existsSync(candidate)) {
-        return candidate;
-      }
-    }
-  }
-
   throw new Error(
-    `No Chromium-based browser found. Set CHROME_PATH, or install one of:\n  ${BROWSER_CANDIDATES.join('\n  ')}`,
+    'No Chromium-based browser found. Run `npx playwright install chromium`, '
+      + 'or point CHROME_PATH at a Chromium build that still honours --load-extension.',
   );
 }
 

@@ -1,0 +1,157 @@
+<!doctype html>
+<!--
+  Stands in for a YouTube watch page so the extension can be exercised against
+  a real browser. tools/e2e-youtube.mjs serves this from a local HTTPS server
+  that www.youtube.com is resolver-mapped to, so the page's origin really is
+  youtube.com and the scriptlet's host gate opens. Every check the page runs is
+  recorded on window.__results for the runner to assert against.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>ShieldBlock YouTube fixture</title>
+</head>
+<body>
+<!-- Feed renderer the cosmetic layer is supposed to hide. -->
+<ytd-ad-slot-renderer id="feed-ad">feed ad</ytd-ad-slot-renderer>
+
+<!-- Player shell mirroring YouTube's during a video ad. -->
+<div id="movie_player" class="html5-video-player ad-showing">
+  <div class="video-ads ytp-ad-module">
+    <div class="ytp-ad-player-overlay">
+      <button class="ytp-ad-skip-button-modern" id="skip">Skip</button>
+    </div>
+  </div>
+  <video id="ad-video"></video>
+</div>
+
+<script>
+// YouTube's inline bootstrap: an ad schedule on the player response.
+window.ytInitialPlayerResponse = {
+  videoDetails: { videoId: 'fixture-video' },
+  streamingData: { formats: [{ itag: 18 }] },
+  playabilityStatus: { status: 'OK' },
+  adPlacements: [{ adPlacementRenderer: { config: {} } }],
+  playerAds: [{ playerLegacyDesktopWatchAdsRenderer: {} }],
+  adSlots: [{ adSlotRenderer: {} }],
+  adBreakHeartbeatParams: 'aGVhcnRiZWF0'
+};
+window.ytInitialData = {
+  contents: {
+    richGridRenderer: {
+      contents: [
+        { richItemRenderer: { content: { videoRenderer: { videoId: 'organic' } } } },
+        { richItemRenderer: { content: { adSlotRenderer: {} }, trackingParams: 'tp' } }
+      ]
+    }
+  }
+};
+</script>
+
+<script>
+window.__progress = [];
+(async function runFixture() {
+  const results = {};
+  const record = (name, value) => { window.__progress.push(name); results[name] = value; };
+  let skipClicks = 0;
+  document.getElementById('skip').addEventListener('click', () => { skipClicks += 1; });
+
+  // --- 1. The inline bootstrap globals ------------------------------------
+  const bootstrap = window.ytInitialPlayerResponse;
+  record('bootstrapAdKeys', ['adPlacements', 'playerAds', 'adSlots', 'adBreakHeartbeatParams']
+    .filter((key) => key in bootstrap));
+  record('bootstrapVideoId', bootstrap.videoDetails && bootstrap.videoDetails.videoId);
+  record('bootstrapFormats', bootstrap.streamingData && bootstrap.streamingData.formats.length);
+  record('initialDataEntries', window.ytInitialData.contents.richGridRenderer.contents
+    .map((entry) => entry.richItemRenderer.content.videoRenderer
+      ? entry.richItemRenderer.content.videoRenderer.videoId
+      : 'AD'));
+
+  // --- 2. XHR ordering ----------------------------------------------------
+  // The page attaches its handler between open() and send(), exactly as
+  // YouTube does. The raw responseText is inspected rather than parsed, so a
+  // JSON.parse hook cannot mask a failure of the XHR path itself.
+  record('xhrRawHasAds', await new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/youtubei/v1/player');
+    xhr.onreadystatechange = function () {
+      if (this.readyState !== 4) return;
+      resolve(/"adPlacements"|"adSlotRenderer"/.test(this.responseText));
+    };
+    xhr.send('{}');
+  }));
+
+  // --- 3. fetch on a non-player Innertube endpoint -------------------------
+  const nextResponse = await fetch('/youtubei/v1/next', { method: 'POST', body: '{}' });
+  const nextBody = await nextResponse.clone().text();
+  const nextJson = await nextResponse.json();
+  record('fetchRawHasAds', /"adSlotRenderer"|"promotedSparklesWebRenderer"/.test(nextBody));
+  record('fetchEntries', nextJson.contents.sectionListRenderer.contents[0]
+    .itemSectionRenderer.contents.map((entry) => entry.videoRenderer
+      ? entry.videoRenderer.videoId
+      : 'AD'));
+
+  // --- 4. Cosmetic hiding --------------------------------------------------
+  const feedAd = document.getElementById('feed-ad');
+  record('feedAdDisplay', getComputedStyle(feedAd).display);
+  record('skipButtonDisplay', getComputedStyle(document.getElementById('skip')).display);
+
+  // --- 5. The player fallback ---------------------------------------------
+  // A MediaSource gives the ad video a real, finite duration without needing a
+  // media file, which is what the seek-to-end path keys off.
+  const video = document.getElementById('ad-video');
+  await new Promise((resolve) => {
+    try {
+      const mediaSource = new MediaSource();
+      mediaSource.addEventListener('sourceopen', () => {
+        try { mediaSource.duration = 30; } catch { /* ignore */ }
+        resolve();
+      }, { once: true });
+      video.src = URL.createObjectURL(mediaSource);
+      setTimeout(resolve, 2000);
+    } catch {
+      resolve();
+    }
+  });
+  record('adDuration', video.duration);
+
+  // Give the 200ms loop a few passes.
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  record('hooked', window.__sb_yt_hooked === true);
+  record('adMuted', video.muted);
+  record('adPlaybackRate', video.playbackRate);
+  record('adCurrentTime', video.currentTime);
+  record('skipClicks', skipClicks);
+
+  // --- 6. Observer latency on the ad transition ---------------------------
+  // Reset to a clean non-ad state, then flip the class back on and see how
+  // quickly the player is muted again. Under the old poll-only design this
+  // could take a full interval; the class observer should beat that.
+  const player = document.getElementById('movie_player');
+  player.classList.remove('ad-showing');
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  record('betweenAdsMuted', video.muted);
+
+  video.muted = false;
+  const flippedAt = performance.now();
+  player.classList.add('ad-showing');
+  record('reMuteLatencyMs', await new Promise((resolve) => {
+    const started = performance.now();
+    const timer = setInterval(() => {
+      if (video.muted) {
+        clearInterval(timer);
+        resolve(Math.round(performance.now() - flippedAt));
+      } else if (performance.now() - started > 3000) {
+        clearInterval(timer);
+        resolve(-1);
+      }
+    }, 5);
+  }));
+
+  window.__results = results;
+})().catch((error) => {
+  window.__results = { fixtureError: String((error && error.stack) || error) };
+});
+</script>
+</body>
+</html>

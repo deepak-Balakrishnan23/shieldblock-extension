@@ -29,3 +29,10 @@ jobs:
       # limits on every push rather than at install time on a user's machine.
       - name: Validate packaged rulesets
         run: npm run validate:rules
+
+      # The YouTube layers cannot be covered by unit tests alone — hook
+      # ordering, clicking a control our own CSS hides, and the player fallback
+      # are all browser behaviour. This loads the unpacked extension into
+      # headless Chrome against a fixture watch page.
+      - name: YouTube end-to-end checks
+        run: npm run test:e2e

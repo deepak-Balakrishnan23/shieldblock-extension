@@ -26,6 +26,7 @@ Requires Chrome 120 or newer.
 - `rules/generated/` — rulesets compiled from upstream filter lists at build time
 - `tools/build-rules.mjs` — compiles upstream lists into `rules/generated/`
 - `tools/validate-rules.mjs` — checks packaged rulesets against Chrome's DNR limits
+- `tools/e2e-youtube.mjs` — drives the real extension in headless Chrome against `tests/e2e/`
 - `popup.html` / `popup.js` — popup control center
 - `options.html` / `options.js` — settings, allowlist, custom rules, and diagnostics
 - `icons/` — placeholder extension icons
@@ -155,6 +156,23 @@ hidden element, and requiring visibility made the skip path dead code.
 All three layers check `data-shieldblock-enabled` and
 `data-shieldblock-allowlisted` on `<html>`, which `content.js` publishes, so
 pausing protection or allowlisting YouTube turns every one of them off.
+
+### Testing the YouTube layers
+
+`npm test` covers the payload walk on its own. The parts that have actually
+broken cannot be reached that way — whether the XHR hook runs before the page's
+own handler, whether a skip button our own CSS has hidden can still be clicked,
+and whether the player fallback mutes and seeks an ad are all browser
+behaviour. `npm run test:e2e` loads the unpacked extension into headless Chrome
+and asserts all of it against a fixture watch page.
+
+The fixture is served from a local HTTPS server that `www.youtube.com` is
+pointed at with `--host-resolver-rules`, so the page's origin really is
+youtube.com and the host gate opens. HTTPS with a throwaway certificate is not
+optional: youtube.com is HSTS-preloaded, so the page will not load over plain
+HTTP, and a cert error cannot be clicked past — the certificate's public key is
+pinned with `--ignore-certificate-errors-spki-list` instead. It needs `openssl`
+and a Chromium-family browser; set `CHROME_PATH` if it cannot find one.
 
 ## Add A New Scriptlet
 

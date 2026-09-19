@@ -271,9 +271,17 @@ async function collectResults(client, url) {
  * @returns {Promise<void>}
  */
 async function requireExtensionLoaded(client, readStderr) {
+  // Look for this extension's own service worker. Matching any
+  // chrome-extension:// target is not enough — the browser ships its own, and
+  // treating one of those as proof let a run with no extension loaded report
+  // twelve unrelated failures instead of the one fact behind them.
+  let targetInfos = [];
+
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const { targetInfos } = await client.send('Target.getTargets');
-    if (targetInfos.some((target) => String(target.url).startsWith('chrome-extension://'))) {
+    ({ targetInfos } = await client.send('Target.getTargets'));
+    const loaded = targetInfos.some((target) => /^chrome-extension:\/\/[a-p]+\/background\.js$/
+      .test(String(target.url)));
+    if (loaded) {
       return;
     }
     await wait(500);
@@ -284,6 +292,8 @@ async function requireExtensionLoaded(client, readStderr) {
   throw new Error(
     'the browser started but never loaded the extension, so no check below would mean anything.\n'
       + `  browser: ${version.product || 'unknown'}\n`
+      + `  extension dir: ${REPO_ROOT}\n`
+      + `  targets: ${JSON.stringify(targetInfos.map((t) => `${t.type} ${t.url}`), null, 2)}\n`
       + (stderr ? `  browser stderr:\n${stderr}\n` : ''),
   );
 }

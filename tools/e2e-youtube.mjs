@@ -31,7 +31,6 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURE_PATH = join(REPO_ROOT, 'tests', 'e2e', 'youtube-fixture.html');
 
 const SERVER_PORT = 8443;
-const DEBUG_PORT = 9333;
 const PAGE_TIMEOUT_MS = 45000;
 
 /** Chromium-family browsers that can load an unpacked extension headless. */
@@ -143,31 +142,59 @@ async function createCertificate(dir) {
 }
 
 /**
- * Minimal Chrome DevTools Protocol client over the browser endpoint. Node's
- * built-in WebSocket is enough, which keeps this dependency-free.
+ * Minimal Chrome DevTools Protocol client over the browser's debugging pipe.
+ *
+ * The pipe rather than --remote-debugging-port because current Google Chrome
+ * refuses --load-extension when a debugging *port* is open; the pipe, together
+ * with --enable-unsafe-extension-debugging, is the supported way to drive a
+ * browser that has an unpacked extension loaded. Messages are JSON, NUL
+ * delimited, written to fd 3 and read back from fd 4. No dependencies needed.
  */
 class DevToolsClient {
   /**
-   * @param {WebSocket} socket
+   * @param {import('node:stream').Writable} outgoing
+   * @param {import('node:stream').Readable} incoming
    */
-  constructor(socket) {
-    this.socket = socket;
+  constructor(outgoing, incoming) {
+    this.outgoing = outgoing;
     this.nextId = 1;
     this.pending = new Map();
-    socket.addEventListener('message', (event) => {
-      const message = JSON.parse(event.data);
-      if (message.method) {
-        return; // Event, not a command result.
-      }
-      const entry = this.pending.get(message.id);
-      if (!entry) return;
-      this.pending.delete(message.id);
-      if (message.error) {
-        entry.reject(new Error(JSON.stringify(message.error)));
-      } else {
-        entry.resolve(message.result);
+
+    let buffer = '';
+    incoming.on('data', (chunk) => {
+      buffer += chunk;
+      let end = buffer.indexOf('\0');
+      while (end !== -1) {
+        const raw = buffer.slice(0, end);
+        buffer = buffer.slice(end + 1);
+        end = buffer.indexOf('\0');
+        if (raw) this.receive(raw);
       }
     });
+  }
+
+  /**
+   * @param {string} raw
+   * @returns {void}
+   */
+  receive(raw) {
+    let message;
+    try {
+      message = JSON.parse(raw);
+    } catch {
+      return;
+    }
+    if (message.method) {
+      return; // Event, not a command result.
+    }
+    const entry = this.pending.get(message.id);
+    if (!entry) return;
+    this.pending.delete(message.id);
+    if (message.error) {
+      entry.reject(new Error(JSON.stringify(message.error)));
+    } else {
+      entry.resolve(message.result);
+    }
   }
 
   /**
@@ -180,29 +207,11 @@ class DevToolsClient {
     const id = this.nextId++;
     const payload = { id, method, params };
     if (sessionId) payload.sessionId = sessionId;
-    this.socket.send(JSON.stringify(payload));
+    this.outgoing.write(`${JSON.stringify(payload)}\0`);
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
     });
   }
-}
-
-/**
- * Polls an HTTP endpoint until it answers with JSON.
- * @param {string} url
- * @returns {Promise<any>}
- */
-async function waitForEndpoint(url) {
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    try {
-      const response = await fetch(url);
-      if (response.ok) return await response.json();
-    } catch {
-      // Not listening yet.
-    }
-    await wait(500);
-  }
-  throw new Error(`DevTools endpoint never came up: ${url}`);
 }
 
 /**
@@ -249,6 +258,34 @@ async function collectResults(client, url) {
   }
 
   return results;
+}
+
+/**
+ * Fails loudly when the browser came up without the extension.
+ *
+ * Every check in this file assumes the extension is running, so without this
+ * a browser that quietly ignored --load-extension reports a wall of unrelated
+ * failures instead of the one fact that explains them.
+ * @param {DevToolsClient} client
+ * @param {() => string} readStderr
+ * @returns {Promise<void>}
+ */
+async function requireExtensionLoaded(client, readStderr) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const { targetInfos } = await client.send('Target.getTargets');
+    if (targetInfos.some((target) => String(target.url).startsWith('chrome-extension://'))) {
+      return;
+    }
+    await wait(500);
+  }
+
+  const version = await client.send('Browser.getVersion').catch(() => ({}));
+  const stderr = readStderr();
+  throw new Error(
+    'the browser started but never loaded the extension, so no check below would mean anything.\n'
+      + `  browser: ${version.product || 'unknown'}\n`
+      + (stderr ? `  browser stderr:\n${stderr}\n` : ''),
+  );
 }
 
 /**
@@ -339,7 +376,7 @@ try {
     '--disable-gpu',
     '--no-first-run',
     `--user-data-dir=${profileDir}`,
-    `--remote-debugging-port=${DEBUG_PORT}`,
+    '--remote-debugging-pipe',
     `--disable-extensions-except=${REPO_ROOT}`,
     `--load-extension=${REPO_ROOT}`,
     `--host-resolver-rules=MAP www.youtube.com 127.0.0.1:${SERVER_PORT},MAP example.test 127.0.0.1:${SERVER_PORT}`,
@@ -349,19 +386,23 @@ try {
     // A sandbox may export HTTPS_PROXY, and Chrome would then send the mapped
     // hostname to that proxy instead of resolving it locally.
     '--no-proxy-server',
+    // Current Chrome refuses --load-extension while it is being debugged
+    // unless this is passed too. Without it the browser comes up fine, with no
+    // extension, and every check fails for a reason the output never states.
+    '--enable-unsafe-extension-debugging',
     'about:blank',
-  ], { stdio: ['ignore', 'ignore', 'ignore'] });
+  ], { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
 
-  const version = await waitForEndpoint(`http://127.0.0.1:${DEBUG_PORT}/json/version`);
-  const socket = new WebSocket(version.webSocketDebuggerUrl);
-  await new Promise((resolve, reject) => {
-    socket.addEventListener('open', resolve, { once: true });
-    socket.addEventListener('error', reject, { once: true });
+  let browserStderr = '';
+  browser.stderr.on('data', (chunk) => {
+    browserStderr = (browserStderr + chunk).slice(-2000);
   });
-  const client = new DevToolsClient(socket);
+
+  const client = new DevToolsClient(browser.stdio[3], browser.stdio[4]);
 
   // Let the MV3 service worker register its rulesets before the first page.
   await wait(4000);
+  await requireExtensionLoaded(client, () => browserStderr);
 
   const youtube = await collectResults(client, 'https://www.youtube.com/watch?v=fixture');
   const offsite = await collectResults(client, 'https://example.test/watch?v=fixture');

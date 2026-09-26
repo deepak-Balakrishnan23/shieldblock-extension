@@ -148,6 +148,12 @@
       const AD_PASS_INTERVAL_MS = 200;
       const CLICK_THROTTLE_MS = 700;
 
+      // Captured before the hooks below replace it. The interceptors parse with
+      // this so what they see is the payload as the server sent it: parsing
+      // through the hooked JSON.parse would strip the ads first, and the
+      // interceptor would conclude there had been nothing to strip.
+      const nativeJsonParse = root.JSON && root.JSON.parse;
+
       let autoSkipIntervalId = 0;
       let playerObserver = null;
       let observedPlayer = null;
@@ -157,6 +163,9 @@
       let autoplayAttemptedSrc = '';
       // The viewer's own playback rate, saved while an ad is burned at 16x.
       let preAdPlaybackRate = 0;
+      // The media source the player was holding the last time it was not
+      // showing an ad — i.e. the video the viewer actually asked for.
+      let mainVideoSrc = '';
 
       /**
        * Returns true when a value is a traversable object.
@@ -234,14 +243,19 @@
        * `/youtubei/v1/next`, `/browse`, `/search`, and `/reel` responses were
        * left in the payload for the cosmetic layer to chase by selector.
        * @param {unknown} input
+       * @param {{removed: number}} [stats] Counts what was taken out, so a
+       *   caller can tell an untouched payload from a cleaned one.
        * @returns {unknown}
        */
-      function pruneAds(input) {
+      function pruneAds(input, stats) {
         if (!isObject(input)) {
           return input;
         }
 
         const seen = new WeakSet();
+        const count = () => {
+          if (stats) stats.removed += 1;
+        };
 
         const visit = (node, depth) => {
           if (!isObject(node) || depth > MAX_PRUNE_DEPTH || seen.has(node)) {
@@ -258,6 +272,7 @@
             for (let index = node.length - 1; index >= 0; index -= 1) {
               if (isEmptyHusk(node[index], 0)) {
                 node.splice(index, 1);
+                count();
               }
             }
 
@@ -267,6 +282,7 @@
           for (const key of Object.keys(node)) {
             if (AD_KEYS.has(key) || AD_RENDERER_KEYS.has(key)) {
               delete node[key];
+              count();
             }
           }
 
@@ -347,12 +363,24 @@
           const response = await Reflect.apply(originalFetch, this, [resource, init]);
 
           try {
-            const json = await response.clone().json();
+            // .text() rather than .json(): Response.prototype.json is hooked
+            // below, and going through it would prune the payload before the
+            // count above could see that anything had been pruned.
+            const json = nativeJsonParse(await response.clone().text());
             if (!isObject(json)) {
               return response;
             }
 
-            pruneAds(json);
+            const stats = { removed: 0 };
+            pruneAds(json, stats);
+
+            // Most Innertube responses carry no ads at all. Handing those back
+            // untouched keeps re-serialization — and everything a rebuilt
+            // Response quietly loses — off every call but the ones that
+            // actually needed cleaning.
+            if (stats.removed === 0) {
+              return response;
+            }
 
             // Rebuild headers from the original response but drop entity headers
             // that no longer describe our re-serialized body. The upstream body
@@ -424,10 +452,15 @@
 
           const parsed = responseType === 'json'
             ? this.response
-            : JSON.parse(this.responseText);
+            : nativeJsonParse(this.responseText);
 
           if (!isObject(parsed)) return;
-          pruneAds(parsed);
+
+          const stats = { removed: 0 };
+          pruneAds(parsed, stats);
+          if (stats.removed === 0) {
+            return;
+          }
 
           const serialized = JSON.stringify(parsed);
           Object.defineProperty(this, 'responseText', {
@@ -507,7 +540,7 @@
         root.__sb_yt_json_hooked = true;
 
         try {
-          const originalParse = root.JSON.parse;
+          const originalParse = nativeJsonParse;
           root.JSON.parse = function shieldBlockJsonParse(text, reviver) {
             const result = Reflect.apply(originalParse, this, [text, reviver]);
             try {
@@ -695,6 +728,18 @@
         if (!isVideoAdPlaying(player)) {
           restorePlaybackState(video);
 
+          // Remember what the viewer is watching, so the ad state below can
+          // tell the ad's media from theirs. Skipped while the element is
+          // empty, and while it sits at the end of an ad we just burned, since
+          // neither is the video they asked for. Readiness is deliberately not
+          // required: a source that is still buffering is theirs too.
+          if (!video.ended) {
+            const current = video.currentSrc || video.src || '';
+            if (current !== '') {
+              mainVideoSrc = current;
+            }
+          }
+
           // Seeking an ad to its end fires `ended` on the player, and the real
           // video that follows often stays paused — leaving the user to press
           // play manually. Resume it, but only in a short window after we
@@ -716,6 +761,18 @@
 
           restoreAutoplay(video);
           return false;
+        }
+
+        // Wait for the player to actually swap in the ad's media.
+        //
+        // `ad-showing` goes on the player before that swap, and in that window
+        // the element is still holding the video the viewer asked for — with
+        // *its* duration. Seeking then sends their video to its end and leaves
+        // a blank player. The class observer fires at exactly that instant, so
+        // this window is hit often rather than rarely.
+        const source = video.currentSrc || video.src || '';
+        if (source !== '' && source === mainVideoSrc) {
+          return true;
         }
 
         // Mute the ad audio. Remember that *we* muted so we can safely restore.
@@ -886,6 +943,7 @@
         // New video: allow one autoplay attempt for it.
         autoplayAttemptedSrc = '';
         burnedAdAt = 0;
+        mainVideoSrc = '';
         // The watch page swaps the player element on some navigations.
         observedPlayer = null;
 

@@ -91,6 +91,12 @@ window.__progress = [];
       ? entry.videoRenderer.videoId
       : 'AD'));
 
+  // An Innertube response with nothing to strip should be handed back as the
+  // server sent it; a rebuilt one carries the charset the rebuild adds.
+  const guideResponse = await fetch('/youtubei/v1/guide', { method: 'POST', body: '{}' });
+  record('guideContentType', guideResponse.headers.get('content-type'));
+  record('nextContentType', nextResponse.headers.get('content-type'));
+
   // --- 4. Cosmetic hiding --------------------------------------------------
   const feedAd = document.getElementById('feed-ad');
   record('feedAdDisplay', getComputedStyle(feedAd).display);
@@ -132,7 +138,13 @@ window.__progress = [];
   await new Promise((resolve) => setTimeout(resolve, 400));
   record('betweenAdsMuted', video.muted);
 
+  // A real second ad arrives as new media, not as a class flip over the same
+  // source — the extension deliberately ignores the latter, because that is
+  // what the viewer's own video looks like in the moment before an ad loads.
   video.muted = false;
+  try {
+    video.src = URL.createObjectURL(new MediaSource());
+  } catch { /* leave the existing source in place */ }
   const flippedAt = performance.now();
   player.classList.add('ad-showing');
   record('reMuteLatencyMs', await new Promise((resolve) => {
@@ -147,6 +159,46 @@ window.__progress = [];
       }
     }, 5);
   }));
+
+  // --- 7. The blank-player race -------------------------------------------
+  // YouTube puts `ad-showing` on the player before it swaps the ad's media in.
+  // In that window the element still holds the viewer's own video, with its
+  // duration, and anything that seeks then sends that video to its end. Drive
+  // exactly that state and confirm the viewer's video is left alone.
+  player.classList.remove('ad-showing');
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  video.muted = false;
+  video.playbackRate = 1;
+
+  // A second MediaSource stands in for the viewer's own video: loaded, with a
+  // real duration, and known to the extension as the current media.
+  const viewers = document.createElement('video');
+  viewers.id = 'viewers-video';
+  player.appendChild(viewers);
+  video.remove();
+  await new Promise((resolve) => {
+    try {
+      const mediaSource = new MediaSource();
+      mediaSource.addEventListener('sourceopen', () => {
+        try { mediaSource.duration = 600; } catch { /* ignore */ }
+        resolve();
+      }, { once: true });
+      viewers.src = URL.createObjectURL(mediaSource);
+      setTimeout(resolve, 2000);
+    } catch {
+      resolve();
+    }
+  });
+
+  // Let the extension see it as the video being watched, then flag an ad
+  // without changing the media, which is the racy window.
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  record('viewersVideoDuration', viewers.duration);
+  player.classList.add('ad-showing');
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  record('viewersVideoCurrentTime', viewers.currentTime);
+  record('viewersVideoRate', viewers.playbackRate);
+  record('viewersVideoMuted', viewers.muted);
 
   window.__results = results;
 })().catch((error) => {

@@ -1,6 +1,6 @@
 {
   "name": "shieldblock-extension",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "private": true,
   "description": "ShieldBlock AI — MV3 ad, tracker, and annoyance blocker with on-device heuristics.",
   "type": "module",

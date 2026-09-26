@@ -141,11 +141,21 @@ means YouTube reads the response before it has been cleaned.
 
 **2. Player fallback.** When an ad plays anyway — a payload shape we do not know
 yet, or a break requested after the page loaded — the scriptlet mutes it, seeks
-it to its end, and runs the rate up to 16x in case the seek is refused. It only
-does this while `#movie_player` carries `ad-showing`/`ad-interrupting`, since
-seeking on a false positive would throw the viewer to the end of the real video.
-A `MutationObserver` on the player's class list catches the transition
+it to its end, and runs the rate up to 16x in case the seek is refused. A
+`MutationObserver` on the player's class list catches the transition
 immediately, with a 200ms loop behind it for states that change no class.
+
+Two conditions gate that, and both matter. The player must carry
+`ad-showing`/`ad-interrupting`, and the `<video>` must be holding media that is
+not what the viewer was watching. The second is the one that is easy to miss:
+`ad-showing` goes on *before* the player swaps the ad's media in, so for a
+moment the element still holds the viewer's own video, with its own duration.
+Seeking in that window sends their video to its end and leaves a blank player —
+and the class observer fires at exactly that instant, so it is a window that
+gets hit rather than a theoretical one. The scriptlet therefore records the
+source it sees whenever no ad is showing and refuses to act until the source
+changes. The trade-off is deliberate: an ad delivered on unchanged media is one
+this layer will not burn, which is the right way round.
 
 **3. Cosmetic filtering (`cosmetic.js`).** The `youtube.com` selector set hides
 the ad containers and feed renderers that reach the DOM before the scriptlet

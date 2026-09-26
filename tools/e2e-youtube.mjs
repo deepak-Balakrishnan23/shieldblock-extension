@@ -84,6 +84,12 @@ const NEXT_PAYLOAD = {
     },
   },
 };
+const GUIDE_PAYLOAD = {
+  items: [
+    { guideEntryRenderer: { entryData: { guideEntryData: { guideEntryId: 'FEwhat_to_watch' } } } },
+    { guideEntryRenderer: { entryData: { guideEntryData: { guideEntryId: 'FEsubscriptions' } } } },
+  ],
+};
 
 /**
  * Pauses for a number of milliseconds.
@@ -357,6 +363,12 @@ function createFixtureServer(credentials, fixture) {
       response.end(JSON.stringify(NEXT_PAYLOAD));
       return;
     }
+    // Carries no ads, so it should come back exactly as sent.
+    if (request.url.startsWith('/youtubei/v1/guide')) {
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify(GUIDE_PAYLOAD));
+      return;
+    }
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     response.end(fixture);
   });
@@ -398,6 +410,17 @@ function buildChecks(youtube, offsite) {
     ['unmuted once the ad ends', youtube.betweenAdsMuted, false],
     ['ad caught within 100ms of the class flip',
       youtube.reMuteLatencyMs >= 0 && youtube.reMuteLatencyMs < 100, true],
+
+    // The window between `ad-showing` going on and the ad's media being
+    // swapped in. Acting there blanks the video the viewer asked for.
+    ['viewer video not seeked before the ad loads', youtube.viewersVideoCurrentTime, 0],
+    ['viewer video not sped up before the ad loads', youtube.viewersVideoRate, 1],
+    ['viewer video not muted before the ad loads', youtube.viewersVideoMuted, false],
+
+    // An Innertube response with no ads in it is handed back as the server
+    // sent it, rather than re-serialized.
+    ['ad-free response passed through', youtube.guideContentType, 'application/json'],
+    ['cleaned response rebuilt', youtube.nextContentType, 'application/json; charset=utf-8'],
 
     // Off YouTube the scriptlet installs nothing at all.
     ['inert off YouTube', offsite.hooked, false],

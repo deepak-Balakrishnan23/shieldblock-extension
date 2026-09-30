@@ -55,7 +55,6 @@
     'data-ad-slot',
     'data-ad-format',
   ]);
-  const PROCESSED_ATTRIBUTE = 'data-shieldblock-heuristic-processed';
   const HIDDEN_ATTRIBUTE = 'data-shieldblock-heuristic-hidden';
   const ML_HIDDEN_ATTRIBUTE = 'data-shieldblock-ml-hidden';
   const SCAN_ELEMENT_BUDGET = 500;
@@ -732,7 +731,6 @@
 
       scannedCount += 1;
       processedElements.add(element);
-      element.setAttribute(PROCESSED_ATTRIBUTE, 'true');
 
       if (shouldSkipElement(element) || !isVisibleElement(element)) {
         continue;

@@ -1,12 +1,6 @@
 (function registerShieldBlockNoFetchIfScriptlet() {
   'use strict';
 
-  const registry = globalThis.__shieldblockScriptletDefinitions || {};
-  if (registry['no-fetch-if']) {
-    globalThis.__shieldblockScriptletDefinitions = registry;
-    return;
-  }
-
   function noFetchIfScriptlet() {
     try {
       const root = globalThis;
@@ -77,9 +71,5 @@
     }
   }
 
-  registry['no-fetch-if'] = noFetchIfScriptlet;
-  globalThis.__shieldblockScriptletDefinitions = registry;
-
-  // Self-execute immediately when loaded directly via manifest at document_start
   noFetchIfScriptlet();
 })();

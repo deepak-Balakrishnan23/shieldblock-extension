@@ -1,12 +1,6 @@
 (function registerShieldBlockPreventSetTimeoutScriptlet() {
   'use strict';
 
-  const registry = globalThis.__shieldblockScriptletDefinitions || {};
-  if (registry['prevent-setTimeout']) {
-    globalThis.__shieldblockScriptletDefinitions = registry;
-    return;
-  }
-
   function preventSetTimeoutScriptlet() {
     try {
       const root = globalThis;
@@ -55,9 +49,5 @@
     }
   }
 
-  registry['prevent-setTimeout'] = preventSetTimeoutScriptlet;
-  globalThis.__shieldblockScriptletDefinitions = registry;
-
-  // Self-execute immediately when loaded directly via manifest at document_start
   preventSetTimeoutScriptlet();
 })();

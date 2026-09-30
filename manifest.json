@@ -34,27 +34,6 @@
         "<all_urls>"
       ],
       "js": [
-        "scriptlets/google-tag.js",
-        "scriptlets/no-sourcepoint.js",
-        "scriptlets/no-admiral.js",
-        "scriptlets/no-confiant.js",
-        "scriptlets/prevent-setTimeout.js",
-        "scriptlets/prevent-addEventListener.js",
-        "scriptlets/set-constant.js",
-        "scriptlets/abort-on-property-read.js",
-        "scriptlets/no-xhr-if.js",
-        "scriptlets/no-fetch-if.js",
-        "scriptlets/yt-player.js",
-        "scriptlets/index.js"
-      ],
-      "run_at": "document_start",
-      "world": "MAIN"
-    },
-    {
-      "matches": [
-        "<all_urls>"
-      ],
-      "js": [
         "cosmetic.js",
         "content.js",
         "sponsorblock.js"

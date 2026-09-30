@@ -9,8 +9,9 @@
 
   const GENERIC_STYLE_ID = 'shieldblock-generic';
   const DOMAIN_STYLE_PREFIX = 'shieldblock-domain-';
-  const OBSERVER_ATTRIBUTE = 'data-shieldblock-cosmetic-observing';
   const INITIAL_HIDDEN_DELAY_MS = 500;
+  /** Most visible text a procedural-rule container may hold and still be hidden. */
+  const MAX_AD_CONTAINER_TEXT = 400;
   const BAIT_CLASS_EXCEPTIONS = new Set([
     'adsbox',
     'ad-placeholder',
@@ -232,6 +233,8 @@
       '.video-ads',
       '#movie_player .ytp-ad-module',
       '.ytd-promoted-sparkles-web-renderer',
+      '.ytd-action-companion-ad-renderer',
+      '#panel-pages',
       'ytd-promoted-sparkles-web-renderer',
       '.ytd-promoted-video-renderer',
       'ytd-promoted-video-renderer',
@@ -676,6 +679,27 @@
   }
 
   /**
+   * Returns true when a container found by a procedural rule is small enough
+   * to be the ad slot itself.
+   *
+   * `div` containing `.taboola-widget` also matches every wrapper up to the
+   * page root, and an inline `.adsbygoogle` inside an <article> would take the
+   * whole article with it. innerText skips what the stylesheet already hid, so
+   * it measures the content left around the ad; a container with real content
+   * stays, and the ad inside it is still hidden by the stylesheet.
+   * @param {Element} element
+   * @returns {boolean}
+   */
+  // ponytail: visible-text cutoff; a sponsored card with longer copy stays
+  // visible (its marker is still hidden). Use a layout signal if that shows up.
+  function isAdSizedContainer(element) {
+    if (element === document.body || element === document.documentElement) {
+      return false;
+    }
+    return (element.innerText || '').trim().length <= MAX_AD_CONTAINER_TEXT;
+  }
+
+  /**
    * Finds parent elements matching a selector that contain an ad child.
    * @param {string} baseSelector
    * @param {string} childSelector
@@ -685,7 +709,7 @@
   function handleHasSelector(baseSelector, childSelector, root) {
     const baseElements = collectScopedMatches(root, baseSelector);
     for (const baseElement of baseElements) {
-      if (baseElement.querySelector(childSelector)) {
+      if (baseElement.querySelector(childSelector) && isAdSizedContainer(baseElement)) {
         hideElement(baseElement);
       }
     }
@@ -702,7 +726,7 @@
     const childElements = collectScopedMatches(root, childSelector);
     for (const childElement of childElements) {
       const ancestor = childElement.closest(ancestorSelector);
-      if (ancestor) {
+      if (ancestor && isAdSizedContainer(ancestor)) {
         hideElement(ancestor);
       }
     }
@@ -817,9 +841,6 @@
       childList: true,
       subtree: true,
     });
-
-    globalThis.__sb_cosmeticObserving = true;
-    document.documentElement?.setAttribute(OBSERVER_ATTRIBUTE, 'true');
   }
 
   /**
@@ -910,42 +931,6 @@
   }
 
   /**
-   * Aggressively removes companion/display ads that appear INSIDE the video player.
-   * These are overlay cards that appear over the video while it's playing.
-   */
-  function removeCompanionAds() {
-    const COMPANION_SELECTORS = [
-      '.ytp-ce-element',           // Info card overlays on video
-      '.ytp-cards-teaser',          // Card teasers (corner popup)
-      '.ytp-cards-button',
-      '#companion',                 // Right-side companion panel
-      '#companion-slot',
-      '.ytd-companion-slot-renderer',
-      'ytd-companion-slot-renderer',
-      '#panel-pages',               // Panel with display ads
-      '.ytd-action-companion-ad-renderer',
-      'ytd-action-companion-ad-renderer',
-      '.iv-branding',               // In-video branding overlay
-      '.ytp-iv-video-content',
-      '#player-ads',
-      '#masthead-ad',
-      '.ytp-ad-overlay-container',
-      '.ytp-ad-text-overlay',
-    ];
-
-    for (const sel of COMPANION_SELECTORS) {
-      try {
-        document.querySelectorAll(sel).forEach(el => {
-          if (el instanceof HTMLElement) {
-            el.style.setProperty('display', 'none', 'important');
-            el.setAttribute('data-sb-hidden', '1');
-          }
-        });
-      } catch { /* ignore bad selectors */ }
-    }
-  }
-
-  /**
    * Neutralizes YouTube's "ad blockers violate Terms" enforcement popup.
    * Hiding the dialog via CSS is not enough — YouTube also locks page scrolling
    * by opening a modal backdrop, leaving the page frozen. This removes the
@@ -994,47 +979,47 @@
   }
 
   /**
-   * Runs the YouTube-specific cleanup passes (companion ads + ad-block wall).
+   * Runs the YouTube ad-block wall check unless protection is off here.
    * @returns {void}
    */
   function runYouTubeCleanup() {
     if (!protectionEnabled || currentPageAllowlisted) {
       return;
     }
-    removeCompanionAds();
     dismissYouTubeAdBlockWall();
   }
 
-  // Run companion ad removal on YouTube pages via a fast interval
+  // Companion and overlay ads are hidden by the YouTube stylesheet; the wall
+  // needs removing from the DOM, so it is checked as the page changes, at most
+  // once per frame.
   if (isYouTubeSurface()) {
-    // Initial run
-    setTimeout(runYouTubeCleanup, 500);
-    setTimeout(runYouTubeCleanup, 1500);
-    setTimeout(runYouTubeCleanup, 3000);
+    let wallCheckQueued = false;
+    const queueWallCheck = () => {
+      if (wallCheckQueued) {
+        return;
+      }
+      wallCheckQueued = true;
+      window.requestAnimationFrame(() => {
+        wallCheckQueued = false;
+        runYouTubeCleanup();
+      });
+    };
 
-    // Watch for dynamically injected companion ads
-    const companionObserver = new MutationObserver(() => {
-      runYouTubeCleanup();
-    });
-
-    const startCompanionObserver = () => {
+    const startWallObserver = () => {
       const target = document.getElementById('player') || document.body;
       if (target) {
-        companionObserver.observe(target, { childList: true, subtree: true });
+        new MutationObserver(queueWallCheck).observe(target, { childList: true, subtree: true });
       }
+      queueWallCheck();
     };
 
     if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', startCompanionObserver, { once: true });
+      document.addEventListener('DOMContentLoaded', startWallObserver, { once: true });
     } else {
-      startCompanionObserver();
+      startWallObserver();
     }
 
-    // Also re-run on YouTube navigation
-    window.addEventListener('yt-navigate-finish', () => {
-      runYouTubeCleanup();
-      setTimeout(runYouTubeCleanup, 800);
-    }, { passive: true });
+    window.addEventListener('yt-navigate-finish', queueWallCheck, { passive: true });
   }
 
   void init();

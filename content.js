@@ -8,8 +8,6 @@
   globalThis.__shieldblockContentInitialized = true;
 
   const CUSTOM_STYLE_ID = 'shieldblock-custom-cosmetics';
-  const PICKER_STYLE_ID = 'shieldblock-picker-style';
-  const PICKER_HOVER_ATTRIBUTE = 'data-shieldblock-picker-hover';
   const INITIAL_HIDDEN_DELAY_MS = 500;
   const HIDDEN_MARKER_MAP = Object.freeze({
     'data-shieldblock-hidden': 'cosmetic',
@@ -33,8 +31,6 @@
   const STAT_FLUSH_DELAY_MS = 1000;
   const pendingStats = Object.create(null);
   let statFlushTimer = 0;
-  let pickerActive = false;
-  let highlightedElement = null;
   let countedElements = new WeakSet();
   const countedPerformanceEntries = new Set();
 
@@ -104,27 +100,26 @@
   }
 
   /**
-   * Escapes a token for safe CSS selector use.
-   * @param {string} value
-   * @returns {string}
-   */
-  function escapeToken(value) {
-    if (globalThis.CSS?.escape) {
-      return globalThis.CSS.escape(value);
-    }
-    return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
-  }
-
-  /**
    * Builds the CSS text for custom cosmetic rules.
    * @param {string[]} selectors
    * @returns {string}
    */
   function buildCustomCss(selectors) {
-    if (!selectors.length) {
-      return '';
-    }
-    return `${selectors.join(', ')} { display: none !important; }`;
+    // One rule per selector, each checked first: custom rules can arrive in an
+    // imported settings file, and a selector carrying `{` could otherwise add
+    // arbitrary CSS, while a single typo would void the whole combined rule.
+    const probe = document.createDocumentFragment();
+    return selectors
+      .filter((selector) => {
+        try {
+          probe.querySelector(selector);
+          return true;
+        } catch {
+          return false;
+        }
+      })
+      .map((selector) => `${selector} { display: none !important; }`)
+      .join('\n');
   }
 
   /**
@@ -342,177 +337,7 @@
     }
   }
 
-  /**
-   * Returns a stable nth-child index for an element.
-   * @param {Element} element
-   * @returns {number}
-   */
-  function getNthChildIndex(element) {
-    if (!element.parentElement) {
-      return 1;
-    }
-    return [...element.parentElement.children].indexOf(element) + 1;
-  }
-
-  /**
-   * Builds a reasonably stable CSS selector for a picked element.
-   * @param {Element} element
-   * @returns {string}
-   */
-  function buildSelector(element) {
-    if (element.id) {
-      return `#${escapeToken(element.id)}`;
-    }
-
-    const segments = [];
-    let current = element;
-
-    while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.body) {
-      let segment = current.localName || current.tagName.toLowerCase();
-      const classNames = [...current.classList]
-        .filter((className) => className && className.length < 48)
-        .slice(0, 2);
-
-      if (classNames.length > 0) {
-        segment += classNames.map((className) => `.${escapeToken(className)}`).join('');
-      } else {
-        segment += `:nth-child(${getNthChildIndex(current)})`;
-      }
-
-      segments.unshift(segment);
-      const selector = segments.join(' > ');
-      try {
-        if (document.querySelectorAll(selector).length === 1) {
-          return selector;
-        }
-      } catch {
-        // Ignore malformed intermediate selectors.
-      }
-
-      current = current.parentElement;
-    }
-
-    return segments.join(' > ');
-  }
-
-  /**
-   * Clears the currently highlighted picker element.
-   * @returns {void}
-   */
-  function clearHighlight() {
-    highlightedElement?.removeAttribute(PICKER_HOVER_ATTRIBUTE);
-    highlightedElement = null;
-  }
-
-  /**
-   * Exits element-picker mode.
-   * @returns {void}
-   */
-  function stopPicker() {
-    if (!pickerActive) {
-      return;
-    }
-
-    pickerActive = false;
-    clearHighlight();
-    document.getElementById(PICKER_STYLE_ID)?.remove();
-    window.removeEventListener('mousemove', handlePickerMove, true);
-    window.removeEventListener('click', handlePickerClick, true);
-    window.removeEventListener('keydown', handlePickerKeydown, true);
-  }
-
-  /**
-   * Handles picker hover state.
-   * @param {MouseEvent} event
-   * @returns {void}
-   */
-  function handlePickerMove(event) {
-    if (!pickerActive || !(event.target instanceof Element)) {
-      return;
-    }
-
-    if (event.target.id === PICKER_STYLE_ID || event.target.closest(`#${PICKER_STYLE_ID}`)) {
-      return;
-    }
-
-    if (highlightedElement === event.target) {
-      return;
-    }
-
-    clearHighlight();
-    highlightedElement = event.target;
-    highlightedElement.setAttribute(PICKER_HOVER_ATTRIBUTE, 'true');
-  }
-
-  /**
-   * Handles picker cancellation.
-   * @param {KeyboardEvent} event
-   * @returns {void}
-   */
-  function handlePickerKeydown(event) {
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      stopPicker();
-    }
-  }
-
-  /**
-   * Handles picker element selection.
-   * @param {MouseEvent} event
-   * @returns {void}
-   */
-  function handlePickerClick(event) {
-    if (!pickerActive || !(event.target instanceof Element)) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopImmediatePropagation();
-
-    const selector = buildSelector(event.target);
-    stopPicker();
-    void sendMessage({
-      action: 'saveRule',
-      rule: `${location.hostname}##${selector}`,
-    });
-  }
-
-  /**
-   * Starts element-picker mode.
-   * @returns {void}
-   */
-  function startPicker() {
-    if (pickerActive) {
-      return;
-    }
-
-    pickerActive = true;
-    const parent = document.head || document.documentElement;
-    if (parent && !document.getElementById(PICKER_STYLE_ID)) {
-      const style = document.createElement('style');
-      style.id = PICKER_STYLE_ID;
-      style.textContent = `
-        [${PICKER_HOVER_ATTRIBUTE}] {
-          outline: 2px solid #00B4D8 !important;
-          outline-offset: 2px !important;
-          cursor: crosshair !important;
-        }
-      `;
-      parent.appendChild(style);
-    }
-
-    window.addEventListener('mousemove', handlePickerMove, true);
-    window.addEventListener('click', handlePickerClick, true);
-    window.addEventListener('keydown', handlePickerKeydown, true);
-  }
-
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message?.action === 'startPicker') {
-      startPicker();
-      sendResponse({ ok: true });
-      return false;
-    }
-
     if (message?.action === 'refreshPageRules') {
       void (async () => {
         await loadPageRules();

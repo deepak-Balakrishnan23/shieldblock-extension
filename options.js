@@ -11,6 +11,7 @@
     summaryRules: document.getElementById('summary-rules'),
     summaryUpdated: document.getElementById('summary-updated'),
     filterListContainer: document.getElementById('filter-list-container'),
+    updateLists: document.getElementById('update-lists'),
     customRulesInput: document.getElementById('custom-rules-input'),
     saveCustomRules: document.getElementById('save-custom-rules'),
     allowlistContainer: document.getElementById('allowlist-container'),
@@ -186,11 +187,7 @@
       checkboxText.textContent = 'Enabled';
       toggleLabel.append(checkbox, checkboxText);
 
-      const refreshButton = createActionButton('ghost-button', 'Fetch now', async () => {
-        await handleRefreshList(name, refreshButton);
-      });
-
-      actions.append(toggleLabel, refreshButton);
+      actions.append(toggleLabel);
       row.append(copy, actions);
       return row;
     });
@@ -335,34 +332,27 @@
   }
 
   /**
-   * Refreshes a filter list from the options page.
-   * @param {string} name
-   * @param {HTMLButtonElement} button
+   * Downloads fresh rules from every enabled list. The background refreshes
+   * them together, since their rules are merged per ruleset.
    * @returns {Promise<void>}
    */
-  async function handleRefreshList(name, button) {
-    const previousLabel = button.textContent;
-    button.disabled = true;
-    button.textContent = 'Refreshing...';
-    setStatus(`Refreshing ${name}...`);
+  async function handleUpdateLists() {
+    elements.updateLists.disabled = true;
+    setStatus('Updating filter lists...');
 
     try {
-      const settings = await sendMessage({
-        action: 'refreshList',
-        name,
-      });
+      const settings = await sendMessage({ action: 'refreshLists' });
       currentSettings = {
         ...currentSettings,
         ...settings,
       };
       render();
-      setStatus(`${name} refreshed.`, 'success');
+      setStatus('Filter lists updated.', 'success');
     } catch {
-      setStatus(`Refreshing ${name} failed.`, 'error');
+      setStatus('Updating filter lists failed.', 'error');
       await loadSettings();
     } finally {
-      button.disabled = false;
-      button.textContent = previousLabel;
+      elements.updateLists.disabled = false;
     }
   }
 
@@ -514,6 +504,10 @@
       switchTab(button.dataset.tab || 'filters');
     });
   }
+
+  elements.updateLists.addEventListener('click', () => {
+    void handleUpdateLists();
+  });
 
   elements.saveCustomRules.addEventListener('click', () => {
     void handleSaveCustomRules();

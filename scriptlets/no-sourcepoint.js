@@ -1,12 +1,6 @@
 (function registerShieldBlockNoSourcepointScriptlet() {
   'use strict';
 
-  const registry = globalThis.__shieldblockScriptletDefinitions || {};
-  if (registry['no-sourcepoint']) {
-    globalThis.__shieldblockScriptletDefinitions = registry;
-    return;
-  }
-
   function noSourcepointScriptlet() {
     try {
       const root = globalThis;
@@ -57,17 +51,15 @@
         };
       }
 
+      // Answers "GDPR applies, nothing consented to". Reporting that GDPR does
+      // not apply would tell any vendor script still on the page that it may
+      // track without consent.
+      const noConsent = { gdprApplies: true, tcString: '' };
       const tcfApi = function shieldBlockTcfApi(_command, _version, callback) {
         if (typeof callback === 'function') {
-          callback({
-            gdprApplies: false,
-            tcString: '',
-          }, true);
+          callback({ ...noConsent }, true);
         }
-        return {
-          gdprApplies: false,
-          tcString: '',
-        };
+        return { ...noConsent };
       };
 
       const cmpApi = function shieldBlockCmpApi(_command, callback) {
@@ -103,9 +95,5 @@
     }
   }
 
-  registry['no-sourcepoint'] = noSourcepointScriptlet;
-  globalThis.__shieldblockScriptletDefinitions = registry;
-
-  // Self-execute immediately when loaded directly via manifest at document_start
   noSourcepointScriptlet();
 })();

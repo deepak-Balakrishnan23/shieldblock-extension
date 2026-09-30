@@ -16,6 +16,7 @@ const SCRIPTLET_SOURCE = readFileSync(join(REPO_ROOT, 'scriptlets', 'yt-player.j
  */
 function loadScriptlet(hostname = 'www.youtube.com') {
   const sandbox = {
+    __shieldblockExposeInternals: true,
     document: {
       documentElement: { getAttribute: () => null },
       querySelector: () => null,
@@ -232,8 +233,8 @@ describe('JSON.parse hook', () => {
 });
 
 describe('off-YouTube pages', () => {
-  // The manifest loads this scriptlet on every page, so everything it installs
-  // has to stay off sites that have no YouTube player to clean up.
+  // Only registered for YouTube hosts, but the scriptlet's own host gate is the
+  // backstop: everything it installs has to stay off sites with no player.
   it('installs nothing', () => {
     const context = loadScriptlet('example.com');
 

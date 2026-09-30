@@ -16,7 +16,7 @@ Requires Chrome 120 or newer.
 
 - `manifest.json` — extension manifest, rulesets, content scripts, and metadata
 - `background.js` — service worker for filter updates, stats, allowlist rules, and settings
-- `content.js` — picker, custom cosmetics, and local stats observers
+- `content.js` — custom cosmetics and local stats observers
 - `cosmetic.js` — generic and domain-specific cosmetic filtering engine
 - `heuristic.js` — DOM scoring engine for native and sponsored ads
 - `ml-classifier.js` — local tree-based classifier for borderline ad candidates
@@ -193,11 +193,12 @@ reporting a wall of failures that all have the one cause.
 
 ## Add A New Scriptlet
 
-1. Create a new file in `scriptlets/`
-2. Register the scriptlet with the shared registry format used by the existing files
-3. Add the file to the `MAIN` world `content_scripts` entry in `manifest.json`
-4. Add the scriptlet name to `SCRIPTLET_MAP` and any matching domain mapping in `scriptlets/index.js`
-5. Reload the unpacked extension and verify the page global patch behaves as expected
+1. Create a new file in `scriptlets/`: an IIFE that runs its patch immediately
+2. Add it to `SCRIPTLET_GROUPS` in `background.js`, in a group whose `matches`
+   cover only the sites it is for. The service worker registers these at
+   `document_start` in the `MAIN` world, skips allowlisted sites, and registers
+   nothing while protection is paused
+3. Reload the unpacked extension and verify the page global patch behaves as expected
 
 ## Publishing
 

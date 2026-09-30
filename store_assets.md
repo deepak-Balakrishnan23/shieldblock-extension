@@ -54,7 +54,6 @@ PRIVACY, PLAINLY
 CONTROLS FOR PEOPLE WHO WANT THEM
 • Allowlist any site with one click, per domain
 • Write your own ABP and cosmetic filter rules
-• Point-and-click element picker for anything left over
 • Export and import your full configuration
 • Live counters for every blocking layer
 

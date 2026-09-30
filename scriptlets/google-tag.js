@@ -1,12 +1,6 @@
 (function registerShieldBlockGoogleTagScriptlet() {
   'use strict';
 
-  const registry = globalThis.__shieldblockScriptletDefinitions || {};
-  if (registry['google-tag']) {
-    globalThis.__shieldblockScriptletDefinitions = registry;
-    return;
-  }
-
   function googleTagScriptlet() {
     try {
       const root = globalThis;
@@ -140,9 +134,5 @@
     }
   }
 
-  registry['google-tag'] = googleTagScriptlet;
-  globalThis.__shieldblockScriptletDefinitions = registry;
-
-  // Self-execute immediately when loaded directly via manifest at document_start
   googleTagScriptlet();
 })();

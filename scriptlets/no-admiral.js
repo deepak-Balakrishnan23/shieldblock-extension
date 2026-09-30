@@ -1,12 +1,6 @@
 (function registerShieldBlockNoAdmiralScriptlet() {
   'use strict';
 
-  const registry = globalThis.__shieldblockScriptletDefinitions || {};
-  if (registry['no-admiral']) {
-    globalThis.__shieldblockScriptletDefinitions = registry;
-    return;
-  }
-
   function noAdmiralScriptlet() {
     try {
       const root = globalThis;
@@ -52,9 +46,5 @@
     }
   }
 
-  registry['no-admiral'] = noAdmiralScriptlet;
-  globalThis.__shieldblockScriptletDefinitions = registry;
-
-  // Self-execute immediately when loaded directly via manifest at document_start
   noAdmiralScriptlet();
 })();

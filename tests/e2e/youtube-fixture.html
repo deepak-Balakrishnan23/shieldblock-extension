@@ -25,6 +25,23 @@
   <video id="ad-video"></video>
 </div>
 
+<!-- Generic procedural rules, which only run off YouTube. An inline ad unit
+     must not take the article around it along, and a widget's page wrapper
+     must survive while its own slot is hidden. -->
+<article id="news-article">
+  <p>The council met on Tuesday evening to review the budget for the coming year. Members spent most of the session on road repairs, the library extension, and the long delayed plan to replace the lighting along the river path.</p>
+  <ins class="adsbygoogle"></ins>
+  <p>Residents who spoke during the public comment period asked for the river path work to be brought forward, citing several evenings of poor visibility over the winter. The council agreed to publish a revised schedule next month.</p>
+</article>
+<div id="page-wrapper">
+  <p>More reading from around the site, picked from the most visited pages of the week, with a short summary of each so readers can decide what to open next before the page finishes loading.</p>
+  <p>Each summary is written by the editors and updated through the day as new pieces are published, which keeps the list current without anyone having to refresh the page by hand.</p>
+  <p>Older pieces drop off the list after a week, but every one of them stays in the archive, which is searchable by date, by author, and by the neighbourhood the story covers.</p>
+  <div id="ad-wrapper"><div class="taboola-widget">Recommended links</div></div>
+</div>
+<!-- Target of a user's custom cosmetic rule, when the runner saves one. -->
+<div id="custom-target" class="custom-hide">custom rule target</div>
+
 <script>
 // YouTube's inline bootstrap: an ad schedule on the player response.
 window.ytInitialPlayerResponse = {
@@ -128,6 +145,16 @@ window.__progress = [];
   record('adPlaybackRate', video.playbackRate);
   record('adCurrentTime', video.currentTime);
   record('skipClicks', skipClicks);
+
+  // Generic cosmetics and scriptlet scoping, asserted off YouTube.
+  const displayOf = (id) => getComputedStyle(document.getElementById(id)).display;
+  record('articleDisplay', displayOf('news-article'));
+  record('pageWrapperDisplay', displayOf('page-wrapper'));
+  record('adWrapperDisplay', displayOf('ad-wrapper'));
+  record('customTargetDisplay', displayOf('custom-target'));
+  record('tcfapiStubbed', typeof window.__tcfapi === 'function');
+  record('setTimeoutWrapped', window.setTimeout.__shieldblockWrapped === true);
+  record('googletagStubbed', typeof (window.googletag && window.googletag.pubads) === 'function');
 
   // --- 6. Observer latency on the ad transition ---------------------------
   // Reset to a clean non-ad state, then flip the class back on and see how

@@ -1,12 +1,6 @@
 (function registerShieldBlockYouTubePlayerScriptlet() {
   'use strict';
 
-  const registry = globalThis.__shieldblockScriptletDefinitions || {};
-  if (registry['yt-player']) {
-    globalThis.__shieldblockScriptletDefinitions = registry;
-    return;
-  }
-
   function ytPlayerScriptlet() {
     try {
       const root = globalThis;
@@ -971,20 +965,16 @@
         }, 100);
       }
 
-      // Exposed for the unit tests, which exercise the payload walk without a
-      // browser. Non-enumerable so it does not show up in a page's own scans.
-      try {
-        Object.defineProperty(root, '__shieldblockYtInternals', {
-          value: Object.freeze({ pruneAds, looksLikeInnertubePayload, isEmptyHusk }),
-          configurable: true,
-          enumerable: false,
-          writable: false,
-        });
-      } catch { /* ignore */ }
+      // Exposed only to the unit tests, which exercise the payload walk without
+      // a browser. A page global would let any site detect the extension.
+      if (root.__shieldblockExposeInternals === true) {
+        root.__shieldblockYtInternals = Object.freeze({ pruneAds, looksLikeInnertubePayload, isEmptyHusk });
+      }
 
-      // Nothing below applies off YouTube, and the manifest loads this file on
-      // every page. Bailing out here keeps the window accessors, the fetch
-      // wrapper, and the XHR wrapper off the rest of the web entirely.
+      // Nothing below applies off YouTube. The background worker only registers
+      // this file for YouTube hosts; the check stays so a wider match pattern
+      // can never put the window accessors, the fetch wrapper, or the XHR
+      // wrapper on the rest of the web.
       // Embedded players count: a youtube.com/youtube-nocookie.com iframe runs
       // its own copy of this scriptlet with its own hostname.
       if (!isYouTubeHost()) {
@@ -1023,10 +1013,5 @@
     }
   }
 
-  registry['yt-player'] = ytPlayerScriptlet;
-  globalThis.__shieldblockScriptletDefinitions = registry;
-
-  // Also self-execute immediately — yt-player.js is loaded directly via manifest
-  // at document_start in MAIN world, so it must run now, not wait for index.js
   ytPlayerScriptlet();
 })();

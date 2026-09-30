@@ -25,9 +25,15 @@ import { homedir, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { createHash } from 'node:crypto';
 
 const run = promisify(execFile);
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+// Chrome names an unpacked extension after its path: the first 32 hex digits
+// of the path's SHA-256, each mapped from 0-f onto a-p.
+const EXTENSION_ORIGIN = `chrome-extension://${[...createHash('sha256').update(REPO_ROOT).digest('hex').slice(0, 32)]
+  .map((digit) => String.fromCharCode(97 + Number.parseInt(digit, 16)))
+  .join('')}`;
 const FIXTURE_PATH = join(REPO_ROOT, 'tests', 'e2e', 'youtube-fixture.html');
 
 const SERVER_PORT = 8443;
@@ -110,7 +116,11 @@ function wait(ms) {
 function findPlaywrightChromium() {
   const relativePaths = [
     ['chrome-linux', 'chrome'],
+    ['chrome-linux64', 'chrome'],
     ['chrome-mac', 'Chromium.app', 'Contents', 'MacOS', 'Chromium'],
+    // Newer Playwright builds ship Chrome for Testing, per architecture.
+    ['chrome-mac-arm64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'],
+    ['chrome-mac-x64', 'Google Chrome for Testing.app', 'Contents', 'MacOS', 'Google Chrome for Testing'],
   ];
 
   for (const root of PLAYWRIGHT_ROOTS) {
@@ -206,6 +216,8 @@ class DevToolsClient {
     this.outgoing = outgoing;
     this.nextId = 1;
     this.pending = new Map();
+    /** Protocol events, for the few checks that need execution contexts. */
+    this.events = [];
 
     let buffer = '';
     incoming.on('data', (chunk) => {
@@ -232,7 +244,8 @@ class DevToolsClient {
       return;
     }
     if (message.method) {
-      return; // Event, not a command result.
+      this.events.push(message); // Event, not a command result.
+      return;
     }
     const entry = this.pending.get(message.id);
     if (!entry) return;
@@ -308,6 +321,81 @@ async function collectResults(client, url) {
 }
 
 /**
+ * Evaluates an expression in a page, retrying until the context exists.
+ * @param {DevToolsClient} client
+ * @param {string} sessionId
+ * @param {string} expression
+ * @param {number} [contextId]
+ * @returns {Promise<any>}
+ */
+async function evaluateIn(client, sessionId, expression, contextId) {
+  const deadline = Date.now() + PAGE_TIMEOUT_MS;
+  let lastError = null;
+  while (Date.now() < deadline) {
+    try {
+      const evaluated = await client.send('Runtime.evaluate', {
+        expression, contextId, returnByValue: true, awaitPromise: true,
+      }, sessionId);
+      if (!evaluated.exceptionDetails) return evaluated.result.value;
+      lastError = evaluated.exceptionDetails;
+    } catch (error) {
+      lastError = error;
+    }
+    await wait(250);
+  }
+  throw new Error(`evaluation never succeeded: ${JSON.stringify(lastError)}`);
+}
+
+/**
+ * Sends a runtime message from the options page, the way the settings UI does.
+ * @param {DevToolsClient} client
+ * @param {object} message
+ * @returns {Promise<any>}
+ */
+async function sendFromOptionsPage(client, message) {
+  const { targetId } = await client.send('Target.createTarget', { url: `${EXTENSION_ORIGIN}/options.html` });
+  const { sessionId } = await client.send('Target.attachToTarget', { targetId, flatten: true });
+  try {
+    return await evaluateIn(client, sessionId, `chrome.runtime.sendMessage(${JSON.stringify(message)})`);
+  } finally {
+    await client.send('Target.closeTarget', { targetId });
+  }
+}
+
+/**
+ * Sends a runtime message from this extension's content-script world on a
+ * web page, which is what a site that got hold of that world could do.
+ * @param {DevToolsClient} client
+ * @param {string} url
+ * @param {object} message
+ * @returns {Promise<any>}
+ */
+async function sendFromContentScript(client, url, message) {
+  const { targetId } = await client.send('Target.createTarget', { url });
+  const { sessionId } = await client.send('Target.attachToTarget', { targetId, flatten: true });
+  try {
+    // Enabling Runtime replays every existing context as an event, including
+    // the isolated world the content scripts run in.
+    await client.send('Runtime.enable', {}, sessionId);
+    const deadline = Date.now() + PAGE_TIMEOUT_MS;
+    let contextId = 0;
+    while (!contextId && Date.now() < deadline) {
+      const created = client.events.find((event) => event.sessionId === sessionId
+        && event.method === 'Runtime.executionContextCreated'
+        && event.params.context.auxData?.type === 'isolated');
+      contextId = created?.params.context.id ?? 0;
+      if (!contextId) await wait(250);
+    }
+    if (!contextId) throw new Error(`no content-script context appeared on ${url}`);
+    return await evaluateIn(
+      client, sessionId, `chrome.runtime.sendMessage(${JSON.stringify(message)})`, contextId,
+    );
+  } finally {
+    await client.send('Target.closeTarget', { targetId });
+  }
+}
+
+/**
  * Fails loudly when the browser came up without the extension.
  *
  * Every check in this file assumes the extension is running, so without this
@@ -318,16 +406,16 @@ async function collectResults(client, url) {
  * @returns {Promise<void>}
  */
 async function requireExtensionLoaded(client, readStderr) {
-  // Look for this extension's own service worker. Matching any
-  // chrome-extension:// target is not enough — the browser ships its own, and
-  // treating one of those as proof let a run with no extension loaded report
-  // twelve unrelated failures instead of the one fact behind them.
+  // Look for this extension's own service worker, by its exact ID. Matching
+  // any chrome-extension:// target is not enough — the browser ships its own,
+  // and Chrome for Testing's include another `background.js` — and treating
+  // one of those as proof let a run with no extension loaded report twelve
+  // unrelated failures instead of the one fact behind them.
   let targetInfos = [];
 
   for (let attempt = 0; attempt < 30; attempt += 1) {
     ({ targetInfos } = await client.send('Target.getTargets'));
-    const loaded = targetInfos.some((target) => /^chrome-extension:\/\/[a-p]+\/background\.js$/
-      .test(String(target.url)));
+    const loaded = targetInfos.some((target) => target.url === `${EXTENSION_ORIGIN}/background.js`);
     if (loaded) {
       return;
     }
@@ -378,9 +466,10 @@ function createFixtureServer(credentials, fixture) {
  * Every assertion, as [label, actual, expected] once the pages have reported.
  * @param {Record<string, any>} youtube
  * @param {Record<string, any>} offsite
+ * @param {Record<string, any>} control Allowlist, pause, and message results.
  * @returns {Array<[string, unknown, unknown]>}
  */
-function buildChecks(youtube, offsite) {
+function buildChecks(youtube, offsite, control) {
   const json = (value) => JSON.stringify(value);
 
   return [
@@ -428,6 +517,33 @@ function buildChecks(youtube, offsite) {
     ['off-YouTube XHR untouched', offsite.xhrRawHasAds, true],
     ['off-YouTube video untouched', offsite.adMuted, false],
     ['off-YouTube skip button untouched', offsite.skipClicks, 0],
+
+    // Procedural rules hide the ad's own slot, never the content around it.
+    ['article with an inline ad kept', offsite.articleDisplay, 'block'],
+    ['page wrapper around a widget kept', offsite.pageWrapperDisplay, 'block'],
+    ['widget slot hidden', offsite.adWrapperDisplay, 'none'],
+
+    // Scriptlets run only on the sites they were written for.
+    ['all-sites scriptlets registered', offsite.googletagStubbed, true],
+    ['consent stub kept off other sites', offsite.tcfapiStubbed, false],
+    ['timer wrapper kept off other sites', offsite.setTimeoutWrapped, false],
+    ['consent stub kept off YouTube', youtube.tcfapiStubbed, false],
+
+    // A content script may read its page rules but not change settings.
+    ['content script reads page rules', Array.isArray(control.pageRules?.selectors), true],
+    ['content script cannot pause protection', control.forbiddenToggle?.error, 'forbidden'],
+
+    // Custom cosmetic rules apply, and cannot smuggle in CSS of their own.
+    ['custom rule hides its target', control.customRules.customTargetDisplay, 'none'],
+    ['crafted custom rule injects nothing', control.customRules.pageWrapperDisplay, 'block'],
+
+    // Allowlisting a site keeps every layer off it, scriptlets included.
+    ['allowlisted: scriptlets kept off', control.allowlisted.googletagStubbed, false],
+    ['allowlisted: cosmetics kept off', control.allowlisted.adWrapperDisplay, 'block'],
+
+    // Pausing keeps the YouTube hooks off the next page load.
+    ['paused: YouTube hooks kept off', control.paused.hooked, false],
+    ['paused: payload untouched', control.paused.bootstrapAdKeys.length, 4],
   ];
 }
 
@@ -481,7 +597,29 @@ try {
   const youtube = await collectResults(client, 'https://www.youtube.com/watch?v=fixture');
   const offsite = await collectResults(client, 'https://example.test/watch?v=fixture');
 
-  const checks = buildChecks(youtube, offsite);
+  // Runs first: were the sender check broken, this would pause protection and
+  // the checks below could no longer tell allowlisting from pausing.
+  const control = {};
+  control.pageRules = await sendFromContentScript(
+    client, 'https://example.test/', { action: 'getPageRules', hostname: 'example.test' },
+  );
+  control.forbiddenToggle = await sendFromContentScript(
+    client, 'https://example.test/', { action: 'toggle', enabled: false },
+  );
+
+  // One ordinary custom rule, and one crafted to close its selector and hide
+  // the page wrapper with a rule of its own.
+  await sendFromOptionsPage(client, {
+    action: 'saveCustomRules',
+    rulesText: 'example.test##.custom-hide\nexample.test##.x{} #page-wrapper{display:none}',
+  });
+  control.customRules = await collectResults(client, 'https://example.test/watch?v=fixture');
+  await sendFromOptionsPage(client, { action: 'allowlistDomain', domain: 'example.test' });
+  control.allowlisted = await collectResults(client, 'https://example.test/watch?v=fixture');
+  await sendFromOptionsPage(client, { action: 'toggle', enabled: false });
+  control.paused = await collectResults(client, 'https://www.youtube.com/watch?v=fixture');
+
+  const checks = buildChecks(youtube, offsite, control);
   let failures = 0;
 
   for (const [label, actual, expected] of checks) {

@@ -1,12 +1,6 @@
 (function registerShieldBlockNoXhrIfScriptlet() {
   'use strict';
 
-  const registry = globalThis.__shieldblockScriptletDefinitions || {};
-  if (registry['no-xhr-if']) {
-    globalThis.__shieldblockScriptletDefinitions = registry;
-    return;
-  }
-
   function noXhrIfScriptlet() {
     try {
       const xhrPrototype = globalThis.XMLHttpRequest?.prototype;
@@ -59,9 +53,5 @@
     }
   }
 
-  registry['no-xhr-if'] = noXhrIfScriptlet;
-  globalThis.__shieldblockScriptletDefinitions = registry;
-
-  // Self-execute immediately when loaded directly via manifest at document_start
   noXhrIfScriptlet();
 })();

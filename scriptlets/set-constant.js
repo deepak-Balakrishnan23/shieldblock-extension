@@ -1,12 +1,6 @@
 (function registerShieldBlockSetConstantScriptlet() {
   'use strict';
 
-  const registry = globalThis.__shieldblockScriptletDefinitions || {};
-  if (registry['set-constant']) {
-    globalThis.__shieldblockScriptletDefinitions = registry;
-    return;
-  }
-
   function setConstantScriptlet(propertyPath, value) {
     try {
       const root = globalThis;
@@ -57,9 +51,5 @@
     }
   }
 
-  registry['set-constant'] = setConstantScriptlet;
-  globalThis.__shieldblockScriptletDefinitions = registry;
-
-  // Self-execute immediately when loaded directly via manifest at document_start
   setConstantScriptlet();
 })();

@@ -1,12 +1,6 @@
 (function registerShieldBlockAbortOnPropertyReadScriptlet() {
   'use strict';
 
-  const registry = globalThis.__shieldblockScriptletDefinitions || {};
-  if (registry['abort-on-property-read']) {
-    globalThis.__shieldblockScriptletDefinitions = registry;
-    return;
-  }
-
   function abortOnPropertyReadScriptlet(propertyName) {
     try {
       const root = globalThis;
@@ -41,9 +35,5 @@
     }
   }
 
-  registry['abort-on-property-read'] = abortOnPropertyReadScriptlet;
-  globalThis.__shieldblockScriptletDefinitions = registry;
-
-  // Self-execute immediately when loaded directly via manifest at document_start
   abortOnPropertyReadScriptlet();
 })();

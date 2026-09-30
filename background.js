@@ -125,6 +125,57 @@ const DAILY_STAT_KEYS = Object.freeze({
   phishingBlocked: 'phishing',
 });
 const DAILY_STAT_FIELDS = Object.freeze(['ads', 'trackers', 'cosmetic', 'heuristic', 'ml', 'phishing']);
+/**
+ * MAIN-world scriptlets, each scoped to the sites it was written for.
+ *
+ * Registered at runtime rather than in the manifest so pausing protection and
+ * allowlisting a site can actually keep them off the page: these stubs and
+ * fetch/XHR/timer wrappers are installed at document_start, before any page
+ * flag could tell them to stand down. Files within a group run in order, which
+ * matters for YouTube, where yt-player builds on no-fetch-if's fetch wrapper.
+ */
+const SCRIPTLET_GROUPS = Object.freeze([
+  {
+    id: 'scriptlets-all',
+    matches: ['<all_urls>'],
+    js: ['scriptlets/google-tag.js', 'scriptlets/set-constant.js', 'scriptlets/abort-on-property-read.js'],
+  },
+  {
+    id: 'scriptlets-youtube',
+    matches: ['*://*.youtube.com/*', '*://*.youtube-nocookie.com/*', '*://youtu.be/*'],
+    js: ['scriptlets/no-xhr-if.js', 'scriptlets/no-fetch-if.js', 'scriptlets/yt-player.js'],
+  },
+  {
+    id: 'scriptlets-sourcepoint',
+    matches: ['*://*.forbes.com/*', '*://*.bloomberg.com/*', '*://*.wired.com/*', '*://*.wsj.com/*'],
+    js: ['scriptlets/no-sourcepoint.js'],
+  },
+  {
+    id: 'scriptlets-timers',
+    matches: ['*://*.forbes.com/*', '*://*.bloomberg.com/*'],
+    js: ['scriptlets/prevent-setTimeout.js'],
+  },
+  {
+    id: 'scriptlets-admiral',
+    matches: ['*://*.theatlantic.com/*'],
+    js: ['scriptlets/no-admiral.js'],
+  },
+]);
+/** Hostnames that can be dropped into a match pattern as-is. */
+const MATCH_PATTERN_HOST = /^[a-z0-9.-]+$/;
+/**
+ * Actions a content script may send. Everything else changes settings or
+ * rules, so it is accepted only from the extension's own pages: a content
+ * script runs inside whatever site it is on, and must not be able to pause
+ * protection or allowlist domains on the user's behalf.
+ */
+const CONTENT_SCRIPT_ACTIONS = new Set([
+  'loadMlClassifier',
+  'getPageRules',
+  'pageLoad',
+  'incrementStats',
+  'incrementStat',
+]);
 
 /**
  * Returns today's date as a stable YYYY-MM-DD key (UTC).
@@ -691,12 +742,54 @@ async function getStoredDynamicRules() {
 }
 
 /**
+ * Registers the MAIN-world scriptlets for the current state: none while
+ * protection is paused, and never on allowlisted sites.
+ * @returns {Promise<void>}
+ */
+async function registerScriptlets() {
+  const state = await getState();
+  await chrome.scripting.unregisterContentScripts();
+  if (!state.enabled) {
+    return;
+  }
+
+  // `*.example.com` also matches example.com itself.
+  const excludeMatches = state.allowlistedDomains
+    .filter((domain) => MATCH_PATTERN_HOST.test(domain))
+    .map((domain) => `*://*.${domain}/*`);
+  await chrome.scripting.registerContentScripts(SCRIPTLET_GROUPS.map((group) => ({
+    ...group,
+    js: [...group.js],
+    matches: [...group.matches],
+    excludeMatches,
+    runAt: 'document_start',
+    world: 'MAIN',
+  })));
+}
+
+let scriptletSync = Promise.resolve();
+
+/**
+ * Re-registers scriptlets, one run at a time. Startup, activation, and a user
+ * toggle can all reconcile at once, and overlapping unregister/register pairs
+ * would fail on duplicate script IDs.
+ * @returns {Promise<void>}
+ */
+function syncScriptlets() {
+  scriptletSync = scriptletSync
+    .then(registerScriptlets)
+    .catch((error) => logger.error('Failed to register scriptlets', error));
+  return scriptletSync;
+}
+
+/**
  * Reconciles storage state with static and dynamic DNR state.
  * @returns {Promise<void>}
  */
 async function reconcileRulesetState() {
   try {
     const state = await getState();
+    await syncScriptlets();
     await applyStaticRulesetState(state.enabled);
     await replaceDynamicRules(state.enabled ? await getStoredDynamicRules() : []);
     await logger.debug('Ruleset state reconciled', {
@@ -960,17 +1053,6 @@ async function saveCustomRules(lines) {
   await reconcileRulesetState();
   await broadcastPageRuleRefresh();
   return buildSettingsResponse();
-}
-
-/**
- * Adds a single picker-generated rule to the custom rule set.
- * @param {string} rule
- * @returns {Promise<object>}
- */
-async function savePickerRule(rule) {
-  const state = await getState();
-  const nextLines = [...state.customRuleLines, rule];
-  return saveCustomRules(nextLines);
 }
 
 /**
@@ -1296,6 +1378,13 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  const fromExtensionPage = typeof sender?.url === 'string'
+    && sender.url.startsWith(chrome.runtime.getURL(''));
+  if (!fromExtensionPage && !CONTENT_SCRIPT_ACTIONS.has(message?.action)) {
+    sendResponse({ ok: false, error: 'forbidden' });
+    return false;
+  }
+
   void (async () => {
     try {
       if (message?.action === 'loadMlClassifier') {
@@ -1348,7 +1437,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
 
-      if (message?.action === 'refreshLists' || message?.action === 'refreshList') {
+      if (message?.action === 'refreshLists') {
         sendResponse(await fetchAndCompileFilters());
         return;
       }
@@ -1360,11 +1449,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       if (message?.action === 'removeAllowlistDomain') {
         sendResponse(await removeAllowlistedDomain(message.domain));
-        return;
-      }
-
-      if (message?.action === 'saveRule') {
-        sendResponse(await savePickerRule(message.rule));
         return;
       }
 

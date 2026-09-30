@@ -17,7 +17,6 @@ const elements = {
   dataSavedToday: document.getElementById('data-saved-today'),
   cosmeticCount: document.getElementById('cosmetic-count'),
   heuristicCount: document.getElementById('heuristic-count'),
-  mlCount: document.getElementById('ml-count'),
   phishingCount: document.getElementById('phishing-count'),
   currentDomain: document.getElementById('current-domain'),
   pageTitle: document.getElementById('page-title'),
@@ -129,7 +128,6 @@ function renderStats(stats) {
   // Secondary breakdown
   if (elements.cosmeticCount) elements.cosmeticCount.textContent = formatCount(stats.cosmeticCount);
   if (elements.heuristicCount) elements.heuristicCount.textContent = formatCount(stats.heuristicCount);
-  if (elements.mlCount) elements.mlCount.textContent = formatCount(stats.mlCount);
   if (elements.phishingCount) elements.phishingCount.textContent = formatCount(threats);
 
   // Current page / allowlist row

@@ -26,7 +26,6 @@ const RUNTIME_ENTRIES = [
   'content.js',
   'cosmetic.js',
   'heuristic.js',
-  'ml-classifier.js',
   'sponsorblock.js',
   'popup.html',
   'popup.js',

@@ -31,12 +31,11 @@ ShieldBlock AI blocks ads, trackers, and annoyances on your device. No accounts,
 WORKS THE MOMENT YOU INSTALL IT
 133,000 filter rules are compiled into the extension ahead of time, so protection is active on the very first page you open. There is no list to download and no waiting.
 
-FIVE LAYERS OF BLOCKING
+FOUR LAYERS OF BLOCKING
 • Network rules stop ad and tracker requests before they load
 • Cosmetic filtering removes the empty frames ads leave behind
 • Scriptlets defeat anti-adblock walls on supported sites
 • Heuristics catch native and in-feed ads that lists miss
-• An on-device ML classifier scores borderline sponsored content
 
 BUILT NOT TO BREAK SITES
 Filter lists ship thousands of exception rules that exist to keep payment flows, logins, and shared CDNs working. ShieldBlock AI compiles all of them, so blocking stays aggressive without taking the rest of the page down with it.
@@ -47,9 +46,9 @@ Skips video ads, mutes and burns through pre-rolls and mid-rolls, and includes S
 PRIVACY, PLAINLY
 • No accounts, no sign-in, no sync
 • No analytics, no telemetry, no tracking of any kind
-• Ad filtering, heuristics, and ML scoring all run on your device
+• Ad filtering and heuristics all run on your device
 • Your browsing history and page content are never collected or transmitted
-• The one feature that contacts a server is SponsorBlock, and it is built so it cannot identify what you watch: it sends only a four-character hash prefix of the video ID, never the video itself. Switch it off in settings and the extension makes no outbound requests at all.
+• The one feature that contacts a server is SponsorBlock, and it is built so it cannot identify what you watch: it sends only a four-character hash prefix of the video ID, never the video itself. Switch it off in settings and the extension makes no outbound requests unless you ask it to update its filter lists.
 
 CONTROLS FOR PEOPLE WHO WANT THEM
 • Allowlist any site with one click, per domain
@@ -97,7 +96,7 @@ These scripts read only the page's own DOM, in the page, to decide which element
 ### Permission: `scripting`
 
 ```
-Used to inject the extension's own bundled ml-classifier.js into a frame on demand. The classifier is a 91 KB on-device model used to score borderline sponsored content, so it is loaded lazily — only the first time a page actually contains an element the faster heuristics cannot classify confidently — rather than on every page the user opens. The injected file ships inside the extension package; no code is fetched from a server.
+Used to register the extension's own bundled scriptlet files as content scripts at runtime, each scoped to the sites it was written for (for example, the YouTube scriptlets only on YouTube). Registering them at runtime is what lets the extension keep them off sites the user allowlists, and off every site while protection is paused. The registered files ship inside the extension package; no code is fetched from a server.
 ```
 
 ### Permission: `storage`
@@ -117,7 +116,7 @@ Used to read the hostname of the currently active tab so the popup can show whet
 Select **"No, I am not using remote code."** Then paste:
 
 ```
-All executable code ships inside the extension package: the service worker, content scripts, scriptlets, and the ML classifier. The extension contains no eval(), no new Function(), no importScripts(), and it never creates script elements or injects code from a URL. chrome.scripting.executeScript is used only to inject ml-classifier.js, a file bundled in the package.
+All executable code ships inside the extension package: the service worker, content scripts, and scriptlets. The extension contains no eval(), no new Function(), no importScripts(), and it never creates script elements or injects code from a URL. chrome.scripting.registerContentScripts is used only to register scriptlet files bundled in the package.
 
 The extension does download public filter lists over HTTPS, and looks up SponsorBlock segments, but both return plain data — filter-list text is parsed into declarativeNetRequest rule objects and JSON is read as values. Neither is ever executed as code.
 ```

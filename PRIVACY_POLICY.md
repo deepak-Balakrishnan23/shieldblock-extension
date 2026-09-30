@@ -1,6 +1,6 @@
 # ShieldBlock AI Privacy Policy
 
-**Last updated: 1 August 2026**
+**Last updated: 30 September 2026**
 
 ShieldBlock AI does not collect, sell, transfer, or monetize personal data.
 There is no account, no sign-in, no analytics, and no telemetry of any kind.
@@ -16,7 +16,6 @@ All detection and blocking logic runs on your device. This includes:
 - declarative network request rules
 - cosmetic filtering
 - heuristic scoring
-- machine-learning classification
 - custom rules and allowlists
 - local usage counters
 

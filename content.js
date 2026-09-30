@@ -12,7 +12,6 @@
   const HIDDEN_MARKER_MAP = Object.freeze({
     'data-shieldblock-hidden': 'cosmetic',
     'data-shieldblock-heuristic-hidden': 'heuristic',
-    'data-shieldblock-ml-hidden': 'ml',
   });
   const AD_RESOURCE_PATTERN = /doubleclick|googlesyndication|pagead2|amazon-adsystem|adnxs|outbrain|taboola|mgid|revcontent|rubiconproject|2mdn\.net/i;
   const TRACKER_RESOURCE_PATTERN = /google-analytics|googletagmanager|facebook\.net\/tr|clarity\.ms|mixpanel|segment\.io|heap\.io|amplitude|fullstory|logrocket|mouseflow|crazyegg|inspectlet|scorecardresearch|quantserve/i;

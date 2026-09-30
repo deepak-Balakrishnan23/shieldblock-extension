@@ -19,7 +19,6 @@ Requires Chrome 120 or newer.
 - `content.js` — custom cosmetics and local stats observers
 - `cosmetic.js` — generic and domain-specific cosmetic filtering engine
 - `heuristic.js` — DOM scoring engine for native and sponsored ads
-- `ml-classifier.js` — local tree-based classifier for borderline ad candidates
 - `filter-compiler.js` — ABP-to-DNR parsing and compilation helpers
 - `scriptlets/` — main-world patches for anti-adblock and site-specific behavior
 - `rules/` — hand-maintained DNR rulesets

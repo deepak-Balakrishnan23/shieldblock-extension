@@ -43,7 +43,6 @@
         --c-data: #c084fc;
         --c-cosmetic: #f472b6;
         --c-heuristic: #2dd4bf;
-        --c-ml: #a78bfa;
         --c-threats: #fb7185;
 
         --motion: 180ms cubic-bezier(.4, 0, .2, 1);
@@ -225,7 +224,7 @@
 
       /* ===================== Secondary breakdown ===================== */
       .breakdown {
-        display: grid; grid-template-columns: repeat(4, 1fr);
+        display: grid; grid-template-columns: repeat(3, 1fr);
         gap: var(--space-1);
         padding: var(--space-3);
       }
@@ -234,7 +233,6 @@
       .mini-dot { width: 7px; height: 7px; border-radius: 50%; }
       .mini-dot.cosmetic { background: var(--c-cosmetic); }
       .mini-dot.heuristic { background: var(--c-heuristic); }
-      .mini-dot.ml { background: var(--c-ml); }
       .mini-dot.threats { background: var(--c-threats); }
       .mini-value { font-size: var(--fs-md); font-weight: 750; font-variant-numeric: tabular-nums; }
 
@@ -357,10 +355,6 @@
         <div class="mini">
           <span class="mini-label"><span class="mini-dot heuristic"></span>Heuristic</span>
           <span class="mini-value" id="heuristic-count">0</span>
-        </div>
-        <div class="mini">
-          <span class="mini-label"><span class="mini-dot ml"></span>AI</span>
-          <span class="mini-value" id="ml-count">0</span>
         </div>
         <div class="mini">
           <span class="mini-label"><span class="mini-dot threats"></span>Threats</span>

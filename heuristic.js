@@ -56,7 +56,6 @@
     'data-ad-format',
   ]);
   const HIDDEN_ATTRIBUTE = 'data-shieldblock-heuristic-hidden';
-  const ML_HIDDEN_ATTRIBUTE = 'data-shieldblock-ml-hidden';
   const SCAN_ELEMENT_BUDGET = 500;
   const SCAN_TIME_BUDGET_MS = 100;
   const INITIAL_HIDDEN_DELAY_MS = 500;
@@ -65,31 +64,12 @@
     'youtu.be',
   ]);
 
-  let processedElements = new WeakSet();
-  let pendingRoots = new Set();
+  const processedElements = new WeakSet();
+  const pendingRoots = new Set();
   let mutationObserver = null;
   let videoRects = [];
   let currentPageAllowlisted = false;
   let scheduleFlush = () => {};
-  let mlRequested = false;
-
-  /**
-   * Asks the background worker to inject the ML classifier into this frame.
-   * The 91 KB model is loaded lazily — only the first time a borderline element
-   * appears — so pages that never need it don't pay the parse/memory cost.
-   * @returns {void}
-   */
-  function requestMlClassifier() {
-    if (mlRequested || typeof globalThis.__sb_classify === 'function') {
-      return;
-    }
-    mlRequested = true;
-    try {
-      chrome.runtime.sendMessage({ action: 'loadMlClassifier' });
-    } catch {
-      // Service worker unavailable; heuristic scoring still applies.
-    }
-  }
 
   /**
    * Returns true when the current hostname is allowlisted.
@@ -337,34 +317,6 @@
   }
 
   /**
-   * Returns the number of external links inside the element.
-   * @param {Element} element
-   * @returns {number}
-   */
-  function countExternalLinks(element) {
-    let count = 0;
-    const pageHost = location.hostname.replace(/^www\./, '');
-    const links = [
-      ...(element.matches('a[href]') ? [element] : []),
-      ...element.querySelectorAll('a[href]'),
-    ];
-
-    for (const link of links) {
-      try {
-        const target = new URL(link.href, location.href);
-        const host = target.hostname.replace(/^www\./, '');
-        if (host && host !== pageHost) {
-          count += 1;
-        }
-      } catch {
-        // Ignore invalid link URLs.
-      }
-    }
-
-    return count;
-  }
-
-  /**
    * Returns true when an element overlaps a visible video region.
    * @param {Element} element
    * @returns {boolean}
@@ -400,21 +352,6 @@
     }
 
     return children.every((child) => child.tagName === 'IMG' || child.tagName === 'IFRAME');
-  }
-
-  /**
-   * Returns the current element depth in the DOM tree.
-   * @param {Element} element
-   * @returns {number}
-   */
-  function getDepthInDom(element) {
-    let depth = 0;
-    let current = element.parentElement;
-    while (current && depth < 20) {
-      depth += 1;
-      current = current.parentElement;
-    }
-    return depth;
   }
 
   /**
@@ -631,11 +568,10 @@
   /**
    * Scores an element against the 20-signal heuristic model.
    * @param {Element} element
-   * @returns {{ score: number, signals: string[] }}
+   * @returns {number}
    */
   function scoreElement(element) {
     let score = 0;
-    const signals = [];
 
     for (const signal of SIGNALS) {
       let passed = false;
@@ -647,40 +583,24 @@
 
       if (passed) {
         score += signal.weight;
-        signals.push(signal.name);
       }
     }
 
-    return {
-      score: Math.min(score, 100),
-      signals,
-    };
+    return Math.min(score, 100);
   }
 
   /**
    * Hides a detected element exactly once.
    * @param {Element} element
-   * @param {'heuristic' | 'ml'} source
    * @returns {void}
    */
-  function hideElement(element, source) {
-    if (currentPageAllowlisted || !(element instanceof HTMLElement)) {
-      return;
-    }
-
-    if (element.hasAttribute(HIDDEN_ATTRIBUTE) || element.hasAttribute(ML_HIDDEN_ATTRIBUTE)) {
+  function hideElement(element) {
+    if (currentPageAllowlisted || !(element instanceof HTMLElement) || element.hasAttribute(HIDDEN_ATTRIBUTE)) {
       return;
     }
 
     element.style.setProperty('display', 'none', 'important');
-    if (source === 'heuristic') {
-      element.setAttribute(HIDDEN_ATTRIBUTE, 'true');
-      globalThis.__sb_heuristicBlocked = Number(globalThis.__sb_heuristicBlocked || 0) + 1;
-      return;
-    }
-
-    element.setAttribute(ML_HIDDEN_ATTRIBUTE, 'true');
-    globalThis.__sb_mlBlocked = Number(globalThis.__sb_mlBlocked || 0) + 1;
+    element.setAttribute(HIDDEN_ATTRIBUTE, 'true');
   }
 
   /**
@@ -714,13 +634,12 @@
     }
 
     refreshVideoRects();
-    const scanStart = typeof performance?.now === 'function' ? performance.now() : Date.now();
+    const scanStart = performance.now();
     let scannedCount = 0;
     let budgetExceeded = false;
 
     for (const element of collectCandidates(root)) {
-      const now = typeof performance?.now === 'function' ? performance.now() : Date.now();
-      if (scannedCount >= SCAN_ELEMENT_BUDGET || now - scanStart >= SCAN_TIME_BUDGET_MS) {
+      if (scannedCount >= SCAN_ELEMENT_BUDGET || performance.now() - scanStart >= SCAN_TIME_BUDGET_MS) {
         budgetExceeded = true;
         break;
       }
@@ -736,28 +655,8 @@
         continue;
       }
 
-      const result = scoreElement(element);
-      if (result.score >= 70) {
-        hideElement(element, 'heuristic');
-        continue;
-      }
-
-      if (result.score >= 40) {
-        if (typeof globalThis.__sb_classify === 'function') {
-          let probability = 0;
-          try {
-            probability = Number(globalThis.__sb_classify(element, result.score));
-          } catch {
-            probability = 0;
-          }
-
-          if (probability > 0.65) {
-            hideElement(element, 'ml');
-          }
-        } else {
-          // Borderline element but the model isn't loaded yet — fetch it.
-          requestMlClassifier();
-        }
+      if (scoreElement(element) >= 70) {
+        hideElement(element);
       }
     }
 
@@ -835,15 +734,6 @@
   }
 
   /**
-   * Reboots the scan state on SPA navigation.
-   * @returns {void}
-   */
-  function handleNavigation() {
-    processedElements = new WeakSet();
-    scanDOM();
-  }
-
-  /**
    * Boots the heuristic engine after the DOM is ready.
    * @returns {void}
    */
@@ -856,9 +746,6 @@
       return;
     }
 
-    globalThis.__sb_heuristicBlocked = Number(globalThis.__sb_heuristicBlocked || 0);
-    globalThis.__sb_mlBlocked = Number(globalThis.__sb_mlBlocked || 0);
-
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => {
         scanDOM();
@@ -867,21 +754,6 @@
     } else {
       scanDOM();
       installObserver();
-    }
-
-    globalThis.addEventListener('yt-navigate-finish', handleNavigation, { passive: true });
-
-    // When the lazily-injected ML model becomes available, re-scan so the
-    // borderline elements that triggered the request get classified.
-    try {
-      chrome.runtime.onMessage.addListener((message) => {
-        if (message?.action === 'mlReady') {
-          processedElements = new WeakSet();
-          scanDOM();
-        }
-      });
-    } catch {
-      // Messaging unavailable; heuristic scoring still applies.
     }
   }
 

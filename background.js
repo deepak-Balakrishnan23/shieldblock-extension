@@ -68,7 +68,6 @@ const COUNTER_STORAGE_KEYS = Object.freeze([
   'trackersBlocked',
   'cosmeticBlocked',
   'heuristicBlocked',
-  'mlBlocked',
   'phishingBlocked',
 ]);
 const STORAGE_DEFAULTS = {
@@ -89,9 +88,8 @@ const STORAGE_DEFAULTS = {
   trackersBlocked: 0,
   cosmeticBlocked: 0,
   heuristicBlocked: 0,
-  mlBlocked: 0,
   phishingBlocked: 0,
-  dailyStats: { day: '', ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, ml: 0, phishing: 0 },
+  dailyStats: { day: '', ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, phishing: 0 },
   'compiledRules_ads-core': [],
   'compiledRules_trackers': [],
   customDynamicRules: [],
@@ -111,8 +109,6 @@ const STAT_KEY_ALIASES = Object.freeze({
   cosmeticBlocked: 'cosmeticBlocked',
   heuristic: 'heuristicBlocked',
   heuristicBlocked: 'heuristicBlocked',
-  ml: 'mlBlocked',
-  mlBlocked: 'mlBlocked',
   phishing: 'phishingBlocked',
   phishingBlocked: 'phishingBlocked',
 });
@@ -121,10 +117,9 @@ const DAILY_STAT_KEYS = Object.freeze({
   trackersBlocked: 'trackers',
   cosmeticBlocked: 'cosmetic',
   heuristicBlocked: 'heuristic',
-  mlBlocked: 'ml',
   phishingBlocked: 'phishing',
 });
-const DAILY_STAT_FIELDS = Object.freeze(['ads', 'trackers', 'cosmetic', 'heuristic', 'ml', 'phishing']);
+const DAILY_STAT_FIELDS = Object.freeze(['ads', 'trackers', 'cosmetic', 'heuristic', 'phishing']);
 /**
  * MAIN-world scriptlets, each scoped to the sites it was written for.
  *
@@ -170,7 +165,6 @@ const MATCH_PATTERN_HOST = /^[a-z0-9.-]+$/;
  * protection or allowlist domains on the user's behalf.
  */
 const CONTENT_SCRIPT_ACTIONS = new Set([
-  'loadMlClassifier',
   'getPageRules',
   'pageLoad',
   'incrementStats',
@@ -188,10 +182,10 @@ function currentDayString() {
 /**
  * Sanitizes a persisted daily-stats record.
  * @param {unknown} value
- * @returns {{ day: string, ads: number, trackers: number, cosmetic: number, heuristic: number, ml: number, phishing: number }}
+ * @returns {{ day: string, ads: number, trackers: number, cosmetic: number, heuristic: number, phishing: number }}
  */
 function sanitizeDailyStats(value) {
-  const result = { day: '', ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, ml: 0, phishing: 0 };
+  const result = { day: '', ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, phishing: 0 };
   if (value && typeof value === 'object') {
     result.day = typeof value.day === 'string' ? value.day : '';
     for (const field of DAILY_STAT_FIELDS) {
@@ -205,14 +199,14 @@ function sanitizeDailyStats(value) {
  * Returns the daily-stats record for the current day, resetting it when the
  * stored record is from a previous day.
  * @param {{ day: string }} dailyStats
- * @returns {{ day: string, ads: number, trackers: number, cosmetic: number, heuristic: number, ml: number, phishing: number }}
+ * @returns {{ day: string, ads: number, trackers: number, cosmetic: number, heuristic: number, phishing: number }}
  */
 function resolveTodayStats(dailyStats) {
   const today = currentDayString();
   if (dailyStats && dailyStats.day === today) {
     return dailyStats;
   }
-  return { day: today, ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, ml: 0, phishing: 0 };
+  return { day: today, ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, phishing: 0 };
 }
 
 /**
@@ -362,7 +356,6 @@ async function getState() {
     trackersBlocked: Number.isFinite(stored.trackersBlocked) ? stored.trackersBlocked : 0,
     cosmeticBlocked: Number.isFinite(stored.cosmeticBlocked) ? stored.cosmeticBlocked : 0,
     heuristicBlocked: Number.isFinite(stored.heuristicBlocked) ? stored.heuristicBlocked : 0,
-    mlBlocked: Number.isFinite(stored.mlBlocked) ? stored.mlBlocked : 0,
     phishingBlocked: Number.isFinite(stored.phishingBlocked) ? stored.phishingBlocked : 0,
     dailyStats: sanitizeDailyStats(stored.dailyStats),
     'compiledRules_ads-core': sanitizeRuleArray(stored['compiledRules_ads-core']),
@@ -854,13 +847,11 @@ async function buildStatsResponse() {
     trackerCount: state.trackersBlocked,
     cosmeticCount: state.cosmeticBlocked,
     heuristicCount: state.heuristicBlocked,
-    mlCount: state.mlBlocked,
     phishingCount: state.phishingBlocked,
     todayAds: today.ads,
     todayTrackers: today.trackers,
     todayCosmetic: today.cosmetic,
     todayHeuristic: today.heuristic,
-    todayMl: today.ml,
     todayPhishing: today.phishing,
     // Packaged static rules now carry the bulk of network coverage; dynamic
     // rules hold only the live-update supplement, custom rules, and allowlist.
@@ -1152,7 +1143,7 @@ async function applyStatDeltas(deltas) {
 async function resetStats() {
   const payload = {
     blockedCount: 0,
-    dailyStats: { day: currentDayString(), ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, ml: 0, phishing: 0 },
+    dailyStats: { day: currentDayString(), ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, phishing: 0 },
   };
   for (const key of COUNTER_STORAGE_KEYS) {
     payload[key] = 0;
@@ -1262,7 +1253,6 @@ async function importSettings(payload) {
     trackersBlocked: Number.isFinite(payload?.trackersBlocked) ? payload.trackersBlocked : 0,
     cosmeticBlocked: Number.isFinite(payload?.cosmeticBlocked) ? payload.cosmeticBlocked : 0,
     heuristicBlocked: Number.isFinite(payload?.heuristicBlocked) ? payload.heuristicBlocked : 0,
-    mlBlocked: Number.isFinite(payload?.mlBlocked) ? payload.mlBlocked : 0,
     phishingBlocked: Number.isFinite(payload?.phishingBlocked) ? payload.phishingBlocked : 0,
     'compiledRules_ads-core': currentState['compiledRules_ads-core'],
     'compiledRules_trackers': currentState['compiledRules_trackers'],
@@ -1324,7 +1314,6 @@ async function initializeOnInstall() {
       trackersBlocked: current.trackersBlocked,
       cosmeticBlocked: current.cosmeticBlocked,
       heuristicBlocked: current.heuristicBlocked,
-      mlBlocked: current.mlBlocked,
       phishingBlocked: current.phishingBlocked,
       'compiledRules_ads-core': current['compiledRules_ads-core'],
       'compiledRules_trackers': current['compiledRules_trackers'],
@@ -1387,24 +1376,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   void (async () => {
     try {
-      if (message?.action === 'loadMlClassifier') {
-        const tabId = sender?.tab?.id;
-        const frameId = typeof sender?.frameId === 'number' ? sender.frameId : 0;
-        if (typeof tabId === 'number') {
-          try {
-            await chrome.scripting.executeScript({
-              target: { tabId, frameIds: [frameId] },
-              files: ['ml-classifier.js'],
-            });
-            await chrome.tabs.sendMessage(tabId, { action: 'mlReady' }, { frameId });
-          } catch (error) {
-            await logger.debug('ML classifier injection failed', error);
-          }
-        }
-        sendResponse({ ok: true });
-        return;
-      }
-
       if (message?.action === 'getStats') {
         sendResponse(await buildStatsResponse());
         return;

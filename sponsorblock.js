@@ -225,8 +225,6 @@
     }, NAV_POLL_INTERVAL_MS);
   }
 
-  const host = location.hostname.replace(/^www\./, '').toLowerCase();
-  if (host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtu.be') {
-    void init();
-  }
+  // The manifest only injects this file on YouTube.
+  void init();
 })();

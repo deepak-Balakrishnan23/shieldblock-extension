@@ -106,8 +106,8 @@ Scheduled re-downloading of filter lists is **off by default**, because the
 packaged rulesets are compiled from those same lists and re-fetching them would
 spend the scarce dynamic quota re-adding rules that are already active. Manual
 refresh still works from the popup's refresh button or the options page's
-**Fetch now**, and the scheduled layer can be enabled by sending the background
-worker `{ action: 'setLiveFilterUpdates', enabled: true }`.
+**Update all lists**, and the scheduled layer can be enabled by importing a
+settings file with `"liveFilterUpdates": true`.
 
 ## YouTube Ads
 

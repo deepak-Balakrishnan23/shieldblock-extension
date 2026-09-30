@@ -20,27 +20,9 @@
         fuseAdTag.createAd = noop;
       }
 
-      try {
-        Object.defineProperty(root, 'admiral', {
-          configurable: true,
-          enumerable: true,
-          writable: true,
-          value: admiralStub,
-        });
-      } catch {
-        root.admiral = admiralStub;
-      }
+      root.admiral = admiralStub;
 
-      try {
-        Object.defineProperty(root, 'FuseAdTag', {
-          configurable: true,
-          enumerable: true,
-          writable: true,
-          value: fuseAdTag,
-        });
-      } catch {
-        root.FuseAdTag = fuseAdTag;
-      }
+      root.FuseAdTag = fuseAdTag;
     } catch {
       // Ignore scriptlet failures.
     }

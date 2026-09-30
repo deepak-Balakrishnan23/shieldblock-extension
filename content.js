@@ -181,18 +181,6 @@
   }
 
   /**
-   * Sends a lightweight page-load ping to the background worker.
-   * @returns {Promise<void>}
-   */
-  async function notifyPageLoad() {
-    await sendMessage({
-      action: 'pageLoad',
-      hostname: location.hostname,
-      timestamp: Date.now(),
-    });
-  }
-
-  /**
    * Counts a hidden marker exactly once.
    * @param {Element} element
    * @returns {void}
@@ -396,7 +384,6 @@
   void (async () => {
     await waitForVisibleStart();
     await loadPageRules();
-    await notifyPageLoad();
     installHiddenMarkerObserver();
     installPerformanceObserver();
   })();

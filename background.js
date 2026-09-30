@@ -1,11 +1,6 @@
-import {
-  compileRules,
-  getCompilerStats,
-  parseFilterList,
-} from './filter-compiler.js';
+import { compileRules, parseFilterList } from './filter-compiler.js';
 import {
   CURATED_RULE_COUNT,
-  GENERATED_BUILT_AT,
   GENERATED_CORE_RULESETS,
   GENERATED_EXCEPTION_RULESETS,
   GENERATED_EXTENDED_RULESETS,
@@ -63,18 +58,45 @@ const FILTER_LISTS = Object.freeze([
 const DEFAULT_FILTER_LIST_CONFIG = Object.freeze(Object.fromEntries(
   FILTER_LISTS.map((filterList) => [filterList.name, true]),
 ));
-const COUNTER_STORAGE_KEYS = Object.freeze([
-  'adsBlocked',
-  'trackersBlocked',
-  'cosmeticBlocked',
-  'heuristicBlocked',
-  'phishingBlocked',
-]);
+/**
+ * Blocked-item counters: storage key to the field that tracks today's count.
+ * Content scripts report stats by the daily field name.
+ */
+const COUNTERS = Object.freeze({
+  adsBlocked: 'ads',
+  trackersBlocked: 'trackers',
+  cosmeticBlocked: 'cosmetic',
+  heuristicBlocked: 'heuristic',
+  phishingBlocked: 'phishing',
+});
+const COUNTER_KEY_BY_FIELD = Object.freeze(Object.fromEntries(
+  Object.entries(COUNTERS).map(([key, field]) => [field, key]),
+));
+/** Storage keys earlier versions wrote that nothing reads any more. */
+const RETIRED_STORAGE_KEYS = Object.freeze(['blockedCount', 'ruleCount', 'mlBlocked']);
+
+/**
+ * Returns a zeroed daily-stats record.
+ * @param {string} [day='']
+ * @returns {Record<string, string | number>}
+ */
+function emptyDailyStats(day = '') {
+  return { day, ...Object.fromEntries(Object.values(COUNTERS).map((field) => [field, 0])) };
+}
+
+/**
+ * Returns a finite number, or 0.
+ * @param {unknown} value
+ * @returns {number}
+ */
+function finiteOrZero(value) {
+  return Number.isFinite(value) ? value : 0;
+}
+
 const STORAGE_DEFAULTS = {
   enabled: true,
   installedAt: 0,
   lastUpdated: 0,
-  ruleCount: CURATED_RULE_COUNT,
   filterListStatus: [],
   filterListConfig: { ...DEFAULT_FILTER_LIST_CONFIG },
   debug: false,
@@ -83,13 +105,8 @@ const STORAGE_DEFAULTS = {
   // quota re-adding rules that are already active. Manual refresh still works.
   liveFilterUpdates: false,
   sponsorBlockEnabled: true,
-  blockedCount: 0,
-  adsBlocked: 0,
-  trackersBlocked: 0,
-  cosmeticBlocked: 0,
-  heuristicBlocked: 0,
-  phishingBlocked: 0,
-  dailyStats: { day: '', ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, phishing: 0 },
+  ...Object.fromEntries(Object.keys(COUNTERS).map((key) => [key, 0])),
+  dailyStats: emptyDailyStats(),
   'compiledRules_ads-core': [],
   'compiledRules_trackers': [],
   customDynamicRules: [],
@@ -98,28 +115,6 @@ const STORAGE_DEFAULTS = {
   allowlistedDomains: [],
   allowlistRules: [],
 };
-/** Accepted stat names from content scripts, mapped to their storage key. */
-const STAT_KEY_ALIASES = Object.freeze({
-  ads: 'adsBlocked',
-  adsBlocked: 'adsBlocked',
-  trackers: 'trackersBlocked',
-  tracker: 'trackersBlocked',
-  trackersBlocked: 'trackersBlocked',
-  cosmetic: 'cosmeticBlocked',
-  cosmeticBlocked: 'cosmeticBlocked',
-  heuristic: 'heuristicBlocked',
-  heuristicBlocked: 'heuristicBlocked',
-  phishing: 'phishingBlocked',
-  phishingBlocked: 'phishingBlocked',
-});
-const DAILY_STAT_KEYS = Object.freeze({
-  adsBlocked: 'ads',
-  trackersBlocked: 'trackers',
-  cosmeticBlocked: 'cosmetic',
-  heuristicBlocked: 'heuristic',
-  phishingBlocked: 'phishing',
-});
-const DAILY_STAT_FIELDS = Object.freeze(['ads', 'trackers', 'cosmetic', 'heuristic', 'phishing']);
 /**
  * MAIN-world scriptlets, each scoped to the sites it was written for.
  *
@@ -164,12 +159,7 @@ const MATCH_PATTERN_HOST = /^[a-z0-9.-]+$/;
  * script runs inside whatever site it is on, and must not be able to pause
  * protection or allowlist domains on the user's behalf.
  */
-const CONTENT_SCRIPT_ACTIONS = new Set([
-  'getPageRules',
-  'pageLoad',
-  'incrementStats',
-  'incrementStat',
-]);
+const CONTENT_SCRIPT_ACTIONS = new Set(['getPageRules', 'incrementStats']);
 
 /**
  * Returns today's date as a stable YYYY-MM-DD key (UTC).
@@ -182,14 +172,14 @@ function currentDayString() {
 /**
  * Sanitizes a persisted daily-stats record.
  * @param {unknown} value
- * @returns {{ day: string, ads: number, trackers: number, cosmetic: number, heuristic: number, phishing: number }}
+ * @returns {Record<string, string | number>}
  */
 function sanitizeDailyStats(value) {
-  const result = { day: '', ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, phishing: 0 };
+  const result = emptyDailyStats();
   if (value && typeof value === 'object') {
     result.day = typeof value.day === 'string' ? value.day : '';
-    for (const field of DAILY_STAT_FIELDS) {
-      result[field] = Number.isFinite(value[field]) ? value[field] : 0;
+    for (const field of Object.values(COUNTERS)) {
+      result[field] = finiteOrZero(value[field]);
     }
   }
   return result;
@@ -199,20 +189,17 @@ function sanitizeDailyStats(value) {
  * Returns the daily-stats record for the current day, resetting it when the
  * stored record is from a previous day.
  * @param {{ day: string }} dailyStats
- * @returns {{ day: string, ads: number, trackers: number, cosmetic: number, heuristic: number, phishing: number }}
+ * @returns {Record<string, string | number>}
  */
 function resolveTodayStats(dailyStats) {
   const today = currentDayString();
-  if (dailyStats && dailyStats.day === today) {
-    return dailyStats;
-  }
-  return { day: today, ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, phishing: 0 };
+  return dailyStats && dailyStats.day === today ? dailyStats : emptyDailyStats(today);
 }
 
 /**
  * Lightweight background logger with debug gating for verbose output.
  */
-export const logger = {
+const logger = {
   /**
    * Emits a debug log only when the persisted debug flag is enabled.
    * @param {string} message
@@ -327,9 +314,9 @@ function sanitizeFilterListConfig(config) {
 }
 
 /**
- * Sanitizes a stored rule array.
+ * Returns a stored array, or an empty one.
  * @param {unknown} rules
- * @returns {chrome.declarativeNetRequest.Rule[]}
+ * @returns {Array}
  */
 function sanitizeRuleArray(rules) {
   return Array.isArray(rules) ? rules : [];
@@ -343,26 +330,20 @@ async function getState() {
   const stored = await chrome.storage.local.get(STORAGE_DEFAULTS);
   return {
     enabled: stored.enabled !== false,
-    installedAt: Number.isFinite(stored.installedAt) ? stored.installedAt : 0,
-    lastUpdated: Number.isFinite(stored.lastUpdated) ? stored.lastUpdated : 0,
-    ruleCount: Number.isFinite(stored.ruleCount) ? stored.ruleCount : CURATED_RULE_COUNT,
+    installedAt: finiteOrZero(stored.installedAt),
+    lastUpdated: finiteOrZero(stored.lastUpdated),
     filterListStatus: Array.isArray(stored.filterListStatus) ? stored.filterListStatus : [],
     filterListConfig: sanitizeFilterListConfig(stored.filterListConfig),
     debug: stored.debug === true,
     liveFilterUpdates: stored.liveFilterUpdates === true,
     sponsorBlockEnabled: stored.sponsorBlockEnabled !== false,
-    blockedCount: Number.isFinite(stored.blockedCount) ? stored.blockedCount : 0,
-    adsBlocked: Number.isFinite(stored.adsBlocked) ? stored.adsBlocked : 0,
-    trackersBlocked: Number.isFinite(stored.trackersBlocked) ? stored.trackersBlocked : 0,
-    cosmeticBlocked: Number.isFinite(stored.cosmeticBlocked) ? stored.cosmeticBlocked : 0,
-    heuristicBlocked: Number.isFinite(stored.heuristicBlocked) ? stored.heuristicBlocked : 0,
-    phishingBlocked: Number.isFinite(stored.phishingBlocked) ? stored.phishingBlocked : 0,
+    ...Object.fromEntries(Object.keys(COUNTERS).map((key) => [key, finiteOrZero(stored[key])])),
     dailyStats: sanitizeDailyStats(stored.dailyStats),
     'compiledRules_ads-core': sanitizeRuleArray(stored['compiledRules_ads-core']),
     'compiledRules_trackers': sanitizeRuleArray(stored['compiledRules_trackers']),
     customDynamicRules: sanitizeRuleArray(stored.customDynamicRules),
-    customCosmeticRules: Array.isArray(stored.customCosmeticRules) ? stored.customCosmeticRules : [],
-    customRuleLines: Array.isArray(stored.customRuleLines) ? stored.customRuleLines : [],
+    customCosmeticRules: sanitizeRuleArray(stored.customCosmeticRules),
+    customRuleLines: sanitizeRuleArray(stored.customRuleLines),
     allowlistedDomains: Array.isArray(stored.allowlistedDomains)
       ? stored.allowlistedDomains.map(normalizeDomain).filter(Boolean)
       : [],
@@ -491,19 +472,6 @@ async function replaceDynamicRules(rules) {
 }
 
 /**
- * Trims a compiled ruleset to a specific dynamic-rule budget.
- * @param {chrome.declarativeNetRequest.Rule[]} compiledRules
- * @param {number} budget
- * @returns {chrome.declarativeNetRequest.Rule[]}
- */
-function selectDynamicRules(compiledRules, budget) {
-  if (compiledRules.length <= budget) {
-    return compiledRules;
-  }
-  return compiledRules.slice(0, budget);
-}
-
-/**
  * Builds allowlist DNR rules from a set of domains.
  * @param {string[]} domains
  * @returns {chrome.declarativeNetRequest.Rule[]}
@@ -581,7 +549,7 @@ function compileCustomRuleState(lines) {
   return {
     customRuleLines: split.ruleLines,
     customCosmeticRules: split.cosmeticLines,
-    customDynamicRules: selectDynamicRules(compiledNetworkRules, CUSTOM_DYNAMIC_BUDGET),
+    customDynamicRules: compiledNetworkRules.slice(0, CUSTOM_DYNAMIC_BUDGET),
   };
 }
 
@@ -633,46 +601,13 @@ async function yieldToServiceWorker() {
 }
 
 /**
- * Aggregates compiler statistics across chunked parses.
- * @param {ReturnType<typeof getCompilerStats>} target
- * @param {ReturnType<typeof getCompilerStats>} source
- * @returns {ReturnType<typeof getCompilerStats>}
- */
-function mergeCompilerStats(target, source) {
-  return {
-    parsed: target.parsed + source.parsed,
-    parsedExceptions: target.parsedExceptions + source.parsedExceptions,
-    skippedComments: target.skippedComments + source.skippedComments,
-    skippedCosmetic: target.skippedCosmetic + source.skippedCosmetic,
-    skippedExceptions: target.skippedExceptions + source.skippedExceptions,
-    skippedRegex: target.skippedRegex + source.skippedRegex,
-    skippedUnsupported: target.skippedUnsupported + source.skippedUnsupported,
-    skippedUnknownModifiers: target.skippedUnknownModifiers + source.skippedUnknownModifiers,
-    deduplicated: target.deduplicated + source.deduplicated,
-    capped: target.capped || source.capped,
-  };
-}
-
-/**
  * Parses a raw filter list in chunks to avoid long service-worker stalls.
  * @param {string} text
- * @returns {Promise<{ parsedRules: ReturnType<typeof parseFilterList>, stats: ReturnType<typeof getCompilerStats> }>}
+ * @returns {Promise<ReturnType<typeof parseFilterList>>}
  */
 async function parseFilterListChunked(text) {
   const lines = text.split(/\r?\n/);
   const parsedRules = [];
-  let aggregateStats = {
-    parsed: 0,
-    parsedExceptions: 0,
-    skippedComments: 0,
-    skippedCosmetic: 0,
-    skippedExceptions: 0,
-    skippedRegex: 0,
-    skippedUnsupported: 0,
-    skippedUnknownModifiers: 0,
-    deduplicated: 0,
-    capped: false,
-  };
 
   for (let index = 0; index < lines.length; index += FILTER_PARSE_CHUNK_SIZE) {
     const chunkText = lines.slice(index, index + FILTER_PARSE_CHUNK_SIZE).join('\n');
@@ -682,17 +617,13 @@ async function parseFilterListChunked(text) {
     for (const rule of chunkRules) {
       parsedRules.push(rule);
     }
-    aggregateStats = mergeCompilerStats(aggregateStats, getCompilerStats());
 
     if (index + FILTER_PARSE_CHUNK_SIZE < lines.length) {
       await yieldToServiceWorker();
     }
   }
 
-  return {
-    parsedRules,
-    stats: aggregateStats,
-  };
+  return parsedRules;
 }
 
 /**
@@ -701,23 +632,14 @@ async function parseFilterListChunked(text) {
  * @returns {Promise<string>}
  */
 async function fetchListText(url) {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(url, {
-      cache: 'no-store',
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    return await response.text();
-  } finally {
-    clearTimeout(timeoutId);
+  const response = await fetch(url, {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
   }
+  return response.text();
 }
 
 /**
@@ -843,29 +765,22 @@ async function buildStatsResponse() {
   const staticRuleCount = state.enabled ? await computeStaticRuleCount() : 0;
   return {
     enabled: state.enabled,
-    blockedCount: state.blockedCount,
+    blockedCount: state.adsBlocked,
     trackerCount: state.trackersBlocked,
     cosmeticCount: state.cosmeticBlocked,
     heuristicCount: state.heuristicBlocked,
     phishingCount: state.phishingBlocked,
     todayAds: today.ads,
     todayTrackers: today.trackers,
-    todayCosmetic: today.cosmetic,
-    todayHeuristic: today.heuristic,
     todayPhishing: today.phishing,
-    // Packaged static rules now carry the bulk of network coverage; dynamic
-    // rules hold only the live-update supplement, custom rules, and allowlist.
-    staticRuleCount,
-    dynamicRuleCount: computeRuleCount(state),
+    // Packaged static rules carry the bulk of network coverage; dynamic rules
+    // hold only the live-update supplement, custom rules, and allowlist.
     ruleCount: staticRuleCount + computeRuleCount(state),
-    rulesBuiltAt: GENERATED_BUILT_AT,
     lastUpdated: state.lastUpdated,
     currentDomain,
     isCurrentSiteAllowlisted: currentDomain
       ? isAllowlistedHostname(currentDomain, state.allowlistedDomains)
       : false,
-    filterListStatus: state.filterListStatus,
-    debug: state.debug,
   };
 }
 
@@ -877,6 +792,7 @@ async function buildSettingsResponse() {
   const state = await getState();
   return {
     ...(await buildStatsResponse()),
+    debug: state.debug,
     filterListStatus: state.filterListStatus,
     filterListConfig: state.filterListConfig,
     customRulesText: state.customRuleLines.join('\n'),
@@ -941,9 +857,9 @@ async function fetchAndCompileFilters() {
 
     try {
       const rawText = await fetchListText(filterList.url);
-      const parseResult = await parseFilterListChunked(rawText);
+      const parsedRules = await parseFilterListChunked(rawText);
       // Same stack-safety guard here for merged list accumulation.
-      for (const rule of parseResult.parsedRules) {
+      for (const rule of parsedRules) {
         parsedByRuleset[filterList.ruleset].push(rule);
       }
       anyFetchSucceeded = true;
@@ -954,10 +870,10 @@ async function fetchAndCompileFilters() {
         enabled: true,
         ok: true,
         fetchedAt,
-        parsedRules: parseResult.parsedRules.length,
+        parsedRules: parsedRules.length,
       });
 
-      await logger.debug(`Parsed ${filterList.name}`, parseResult.stats);
+      await logger.debug(`Parsed ${filterList.name}`, { rules: parsedRules.length });
     } catch (error) {
       filterListStatus.push({
         name: filterList.name,
@@ -978,35 +894,30 @@ async function fetchAndCompileFilters() {
   if (FILTER_LISTS.some((filterList) => filterList.ruleset === 'ads-core' && config[filterList.name] !== false)) {
     await yieldToServiceWorker();
     compiledAdsRules = parsedByRuleset['ads-core'].length > 0
-      ? selectDynamicRules(compileRules(parsedByRuleset['ads-core'], ADS_CORE_START_ID), ADS_CORE_DYNAMIC_BUDGET)
+      ? compileRules(parsedByRuleset['ads-core'], ADS_CORE_START_ID).slice(0, ADS_CORE_DYNAMIC_BUDGET)
       : [];
   }
 
   if (FILTER_LISTS.some((filterList) => filterList.ruleset === 'trackers' && config[filterList.name] !== false)) {
     await yieldToServiceWorker();
     compiledTrackerRules = parsedByRuleset.trackers.length > 0
-      ? selectDynamicRules(compileRules(parsedByRuleset.trackers, TRACKERS_START_ID), TRACKERS_DYNAMIC_BUDGET)
+      ? compileRules(parsedByRuleset.trackers, TRACKERS_START_ID).slice(0, TRACKERS_DYNAMIC_BUDGET)
       : [];
   }
 
   if (!anyFetchSucceeded && enabledListCount > 0 && compiledAdsRules.length === 0 && compiledTrackerRules.length === 0) {
-    await chrome.storage.local.set({
-      filterListStatus,
-      ruleCount: CURATED_RULE_COUNT + state.customDynamicRules.length,
-    });
+    await chrome.storage.local.set({ filterListStatus });
     logger.error('All filter list fetches failed; packaged fallback rules remain active');
     return buildStatsResponse();
   }
 
   const lastUpdated = anyFetchSucceeded ? Date.now() : state.lastUpdated;
-  const ruleCount = compiledAdsRules.length + compiledTrackerRules.length + state.customDynamicRules.length;
 
   await chrome.storage.local.set({
     'compiledRules_ads-core': compiledAdsRules,
     'compiledRules_trackers': compiledTrackerRules,
     filterListStatus,
     lastUpdated,
-    ruleCount,
   });
 
   if (state.enabled) {
@@ -1018,7 +929,7 @@ async function fetchAndCompileFilters() {
     ]);
   }
 
-  logger.info('Filter pipeline refresh complete', { ruleCount });
+  logger.info('Filter pipeline refresh complete');
   return buildStatsResponse();
 }
 
@@ -1028,18 +939,7 @@ async function fetchAndCompileFilters() {
  * @returns {Promise<object>}
  */
 async function saveCustomRules(lines) {
-  const state = await getState();
-  const compiledCustomState = compileCustomRuleState(lines);
-  const ruleCount = state['compiledRules_ads-core'].length
-    + state['compiledRules_trackers'].length
-    + compiledCustomState.customDynamicRules.length;
-
-  await chrome.storage.local.set({
-    customRuleLines: compiledCustomState.customRuleLines,
-    customCosmeticRules: compiledCustomState.customCosmeticRules,
-    customDynamicRules: compiledCustomState.customDynamicRules,
-    ruleCount,
-  });
+  await chrome.storage.local.set(compileCustomRuleState(lines));
 
   await reconcileRulesetState();
   await broadcastPageRuleRefresh();
@@ -1102,8 +1002,8 @@ async function removeAllowlistedDomain(domain) {
 async function applyStatDeltas(deltas) {
   const resolved = new Map();
 
-  for (const [rawStat, rawCount] of Object.entries(deltas || {})) {
-    const key = STAT_KEY_ALIASES[String(rawStat || '').trim()];
+  for (const [field, rawCount] of Object.entries(deltas || {})) {
+    const key = COUNTER_KEY_BY_FIELD[field];
     const count = Number(rawCount);
     if (!key || !Number.isFinite(count) || count <= 0) {
       continue;
@@ -1115,21 +1015,13 @@ async function applyStatDeltas(deltas) {
     return { ok: false };
   }
 
-  const stored = await chrome.storage.local.get([...COUNTER_STORAGE_KEYS, 'dailyStats']);
+  const stored = await chrome.storage.local.get([...Object.keys(COUNTERS), 'dailyStats']);
   const today = resolveTodayStats(sanitizeDailyStats(stored.dailyStats));
   const payload = { dailyStats: today };
 
   for (const [key, count] of resolved) {
-    const current = Number.isFinite(stored[key]) ? stored[key] : 0;
-    payload[key] = current + count;
-    if (key === 'adsBlocked') {
-      payload.blockedCount = payload[key];
-    }
-
-    const dailyField = DAILY_STAT_KEYS[key];
-    if (dailyField) {
-      today[dailyField] = (today[dailyField] || 0) + count;
-    }
+    payload[key] = finiteOrZero(stored[key]) + count;
+    today[COUNTERS[key]] += count;
   }
 
   await chrome.storage.local.set(payload);
@@ -1141,14 +1033,10 @@ async function applyStatDeltas(deltas) {
  * @returns {Promise<object>}
  */
 async function resetStats() {
-  const payload = {
-    blockedCount: 0,
-    dailyStats: { day: currentDayString(), ads: 0, trackers: 0, cosmetic: 0, heuristic: 0, phishing: 0 },
-  };
-  for (const key of COUNTER_STORAGE_KEYS) {
-    payload[key] = 0;
-  }
-  await chrome.storage.local.set(payload);
+  await chrome.storage.local.set({
+    ...Object.fromEntries(Object.keys(COUNTERS).map((key) => [key, 0])),
+    dailyStats: emptyDailyStats(currentDayString()),
+  });
   return buildStatsResponse();
 }
 
@@ -1198,31 +1086,6 @@ async function setSponsorBlock(enabled) {
 }
 
 /**
- * Enables or disables scheduled live filter-list downloads.
- *
- * When disabled the packaged static rulesets are the only network layer and the
- * whole dynamic quota stays available for custom rules and the allowlist.
- * @param {boolean} enabled
- * @returns {Promise<object>}
- */
-async function setLiveFilterUpdates(enabled) {
-  const nextEnabled = Boolean(enabled);
-  await chrome.storage.local.set({ liveFilterUpdates: nextEnabled });
-
-  if (nextEnabled) {
-    await fetchAndCompileFilters();
-    return buildSettingsResponse();
-  }
-
-  await chrome.storage.local.set({
-    'compiledRules_ads-core': [],
-    'compiledRules_trackers': [],
-  });
-  await reconcileRulesetState();
-  return buildSettingsResponse();
-}
-
-/**
  * Imports a JSON settings payload and rebuilds derived state.
  * @param {Record<string, unknown>} payload
  * @returns {Promise<object>}
@@ -1242,18 +1105,12 @@ async function importSettings(payload) {
     enabled: payload?.enabled !== false,
     installedAt: Number.isFinite(payload?.installedAt) ? payload.installedAt : currentState.installedAt || Date.now(),
     lastUpdated: currentState.lastUpdated,
-    ruleCount: currentState.ruleCount,
     filterListStatus: currentState.filterListStatus,
     filterListConfig: sanitizeFilterListConfig(payload?.filterListConfig ?? currentState.filterListConfig),
     debug: payload?.debug === true,
     liveFilterUpdates: payload?.liveFilterUpdates === true,
     sponsorBlockEnabled: payload?.sponsorBlockEnabled !== false,
-    blockedCount: Number.isFinite(payload?.blockedCount) ? payload.blockedCount : (Number.isFinite(payload?.adsBlocked) ? payload.adsBlocked : 0),
-    adsBlocked: Number.isFinite(payload?.adsBlocked) ? payload.adsBlocked : 0,
-    trackersBlocked: Number.isFinite(payload?.trackersBlocked) ? payload.trackersBlocked : 0,
-    cosmeticBlocked: Number.isFinite(payload?.cosmeticBlocked) ? payload.cosmeticBlocked : 0,
-    heuristicBlocked: Number.isFinite(payload?.heuristicBlocked) ? payload.heuristicBlocked : 0,
-    phishingBlocked: Number.isFinite(payload?.phishingBlocked) ? payload.phishingBlocked : 0,
+    ...Object.fromEntries(Object.keys(COUNTERS).map((key) => [key, finiteOrZero(payload?.[key])])),
     'compiledRules_ads-core': currentState['compiledRules_ads-core'],
     'compiledRules_trackers': currentState['compiledRules_trackers'],
     customDynamicRules: customRuleState.customDynamicRules,
@@ -1298,30 +1155,13 @@ async function resetToDefaults() {
 async function initializeOnInstall() {
   try {
     const current = await getState();
-    const customRuleState = compileCustomRuleState(current.customRuleLines);
-    const allowlistRules = buildAllowlistRules(current.allowlistedDomains);
+    await chrome.storage.local.remove([...RETIRED_STORAGE_KEYS]);
+    // Custom and allowlist rules are recompiled so an update that changes the
+    // compiler also refreshes rules stored by the previous version.
     await chrome.storage.local.set({
-      enabled: current.enabled,
       installedAt: current.installedAt > 0 ? current.installedAt : Date.now(),
-      lastUpdated: current.lastUpdated,
-      ruleCount: current.ruleCount,
-      filterListStatus: current.filterListStatus,
-      filterListConfig: current.filterListConfig,
-      debug: current.debug,
-      liveFilterUpdates: current.liveFilterUpdates,
-      blockedCount: current.blockedCount,
-      adsBlocked: current.adsBlocked,
-      trackersBlocked: current.trackersBlocked,
-      cosmeticBlocked: current.cosmeticBlocked,
-      heuristicBlocked: current.heuristicBlocked,
-      phishingBlocked: current.phishingBlocked,
-      'compiledRules_ads-core': current['compiledRules_ads-core'],
-      'compiledRules_trackers': current['compiledRules_trackers'],
-      customDynamicRules: customRuleState.customDynamicRules,
-      customCosmeticRules: customRuleState.customCosmeticRules,
-      customRuleLines: customRuleState.customRuleLines,
-      allowlistedDomains: current.allowlistedDomains,
-      allowlistRules,
+      ...compileCustomRuleState(current.customRuleLines),
+      allowlistRules: buildAllowlistRules(current.allowlistedDomains),
     });
 
     await applyStaticRulesetState(current.enabled);
@@ -1399,15 +1239,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
 
-      if (message?.action === 'pageLoad') {
-        await logger.debug('Page load observed', {
-          hostname: typeof message.hostname === 'string' ? message.hostname : '',
-          timestamp: Number.isFinite(message.timestamp) ? message.timestamp : Date.now(),
-        });
-        sendResponse({ ok: true });
-        return;
-      }
-
       if (message?.action === 'refreshLists') {
         sendResponse(await fetchAndCompileFilters());
         return;
@@ -1436,13 +1267,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
 
-      // Retained so a content script from a previous version still records
-      // stats until its tab is reloaded after an update.
-      if (message?.action === 'incrementStat') {
-        sendResponse(await applyStatDeltas({ [message.stat]: 1 }));
-        return;
-      }
-
       if (message?.action === 'resetStats') {
         sendResponse(await resetStats());
         return;
@@ -1460,11 +1284,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
       if (message?.action === 'setSponsorBlock') {
         sendResponse(await setSponsorBlock(Boolean(message.enabled)));
-        return;
-      }
-
-      if (message?.action === 'setLiveFilterUpdates') {
-        sendResponse(await setLiveFilterUpdates(Boolean(message.enabled)));
         return;
       }
 

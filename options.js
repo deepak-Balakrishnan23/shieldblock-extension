@@ -24,13 +24,6 @@
     statusMessage: document.getElementById('status-message'),
   };
 
-  const FILTER_LIST_ORDER = Object.freeze([
-    'EasyList',
-    'EasyPrivacy',
-    'uBlock Filters',
-    'AdGuard Base',
-  ]);
-
   let currentSettings = {
     enabled: true,
     ruleCount: 0,
@@ -42,15 +35,6 @@
     customRulesText: '',
     allowlistedDomains: [],
   };
-
-  /**
-   * Sends a message to the background worker.
-   * @param {object} payload
-   * @returns {Promise<any>}
-   */
-  async function sendMessage(payload) {
-    return chrome.runtime.sendMessage(payload);
-  }
 
   /**
    * Formats a timestamp for the options page.
@@ -86,16 +70,6 @@
   function setStatus(message, tone = 'muted') {
     elements.statusMessage.textContent = message;
     elements.statusMessage.dataset.tone = tone;
-  }
-
-  /**
-   * Clears and replaces a node's children.
-   * @param {Element} node
-   * @param {Node[]} children
-   * @returns {void}
-   */
-  function replaceChildren(node, children) {
-    node.replaceChildren(...children);
   }
 
   /**
@@ -141,7 +115,7 @@
       (currentSettings.filterListStatus || []).map((item) => [item.name, item]),
     );
     const config = currentSettings.filterListConfig || {};
-    const rows = FILTER_LIST_ORDER.map((name) => {
+    const rows = Object.keys(config).map((name) => {
       const status = statusByName.get(name) || {
         name,
         enabled: config[name] !== false,
@@ -192,7 +166,7 @@
       return row;
     });
 
-    replaceChildren(elements.filterListContainer, rows);
+    elements.filterListContainer.replaceChildren(...rows);
   }
 
   /**
@@ -208,7 +182,7 @@
       const empty = document.createElement('div');
       empty.className = 'empty';
       empty.textContent = 'No domains are currently allowlisted.';
-      replaceChildren(elements.allowlistContainer, [empty]);
+      elements.allowlistContainer.replaceChildren(empty);
       return;
     }
 
@@ -237,7 +211,7 @@
       return row;
     });
 
-    replaceChildren(elements.allowlistContainer, rows);
+    elements.allowlistContainer.replaceChildren(...rows);
   }
 
   /**
@@ -258,11 +232,16 @@
    * @returns {Promise<void>}
    */
   async function loadSettings() {
-    const settings = await sendMessage({ action: 'getSettings' });
-    currentSettings = {
-      ...currentSettings,
-      ...settings,
-    };
+    applySettings(await chrome.runtime.sendMessage({ action: 'getSettings' }));
+  }
+
+  /**
+   * Merges a settings response from the background worker and re-renders.
+   * @param {object} settings
+   * @returns {void}
+   */
+  function applySettings(settings) {
+    currentSettings = { ...currentSettings, ...settings };
     render();
   }
 
@@ -288,15 +267,11 @@
   async function handleSaveCustomRules() {
     elements.saveCustomRules.disabled = true;
     try {
-      const settings = await sendMessage({
+      const settings = await chrome.runtime.sendMessage({
         action: 'saveCustomRules',
         rulesText: elements.customRulesInput.value,
       });
-      currentSettings = {
-        ...currentSettings,
-        ...settings,
-      };
-      render();
+      applySettings(settings);
       setStatus('Custom rules saved.', 'success');
     } catch {
       setStatus('Saving custom rules failed.', 'error');
@@ -314,16 +289,12 @@
   async function handleFilterListToggle(name, enabled) {
     setStatus(`Updating ${name}...`);
     try {
-      const settings = await sendMessage({
+      const settings = await chrome.runtime.sendMessage({
         action: 'setFilterListEnabled',
         name,
         enabled,
       });
-      currentSettings = {
-        ...currentSettings,
-        ...settings,
-      };
-      render();
+      applySettings(settings);
       setStatus(`${name} updated.`, 'success');
     } catch {
       setStatus(`Updating ${name} failed.`, 'error');
@@ -341,12 +312,8 @@
     setStatus('Updating filter lists...');
 
     try {
-      const settings = await sendMessage({ action: 'refreshLists' });
-      currentSettings = {
-        ...currentSettings,
-        ...settings,
-      };
-      render();
+      const settings = await chrome.runtime.sendMessage({ action: 'refreshLists' });
+      applySettings(settings);
       setStatus('Filter lists updated.', 'success');
     } catch {
       setStatus('Updating filter lists failed.', 'error');
@@ -364,7 +331,7 @@
   async function handleRemoveAllowlist(domain) {
     setStatus(`Removing ${domain} from the allowlist...`);
     try {
-      await sendMessage({
+      await chrome.runtime.sendMessage({
         action: 'removeAllowlistDomain',
         domain,
       });
@@ -381,15 +348,11 @@
    */
   async function handleDebugToggle() {
     try {
-      const settings = await sendMessage({
+      const settings = await chrome.runtime.sendMessage({
         action: 'setDebug',
         enabled: elements.debugToggle.checked,
       });
-      currentSettings = {
-        ...currentSettings,
-        ...settings,
-      };
-      render();
+      applySettings(settings);
       setStatus(`Debug mode ${elements.debugToggle.checked ? 'enabled' : 'disabled'}.`, 'success');
     } catch {
       elements.debugToggle.checked = !elements.debugToggle.checked;
@@ -403,15 +366,11 @@
    */
   async function handleSponsorBlockToggle() {
     try {
-      const settings = await sendMessage({
+      const settings = await chrome.runtime.sendMessage({
         action: 'setSponsorBlock',
         enabled: elements.sponsorBlockToggle.checked,
       });
-      currentSettings = {
-        ...currentSettings,
-        ...settings,
-      };
-      render();
+      applySettings(settings);
       setStatus(`Sponsor skipping ${elements.sponsorBlockToggle.checked ? 'enabled' : 'disabled'}.`, 'success');
     } catch {
       elements.sponsorBlockToggle.checked = !elements.sponsorBlockToggle.checked;
@@ -456,15 +415,11 @@
     try {
       const text = await file.text();
       const payload = JSON.parse(text);
-      const settings = await sendMessage({
+      const settings = await chrome.runtime.sendMessage({
         action: 'importSettings',
         payload,
       });
-      currentSettings = {
-        ...currentSettings,
-        ...settings,
-      };
-      render();
+      applySettings(settings);
       setStatus('Settings imported.', 'success');
     } catch {
       setStatus('Import failed. Please provide a valid ShieldBlock JSON export.', 'error');
@@ -485,12 +440,8 @@
     elements.resetDefaults.disabled = true;
     setStatus('Resetting ShieldBlock AI...');
     try {
-      const settings = await sendMessage({ action: 'resetToDefaults' });
-      currentSettings = {
-        ...currentSettings,
-        ...settings,
-      };
-      render();
+      const settings = await chrome.runtime.sendMessage({ action: 'resetToDefaults' });
+      applySettings(settings);
       setStatus('ShieldBlock AI reset to defaults.', 'success');
     } catch {
       setStatus('Reset failed.', 'error');

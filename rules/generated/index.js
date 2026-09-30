@@ -16,9 +16,3 @@ export const GENERATED_RULE_COUNTS = Object.freeze({"gen-exc-01":5000,"gen-exc-0
 
 /** Rules in the hand-maintained rulesets, which are always enabled. */
 export const CURATED_RULE_COUNT = 282;
-
-/** Epoch milliseconds when the packaged rules were compiled. */
-export const GENERATED_BUILT_AT = 1785560847767;
-
-/** Total rules across every generated tier. */
-export const GENERATED_RULE_TOTAL = 132740;

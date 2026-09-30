@@ -135,27 +135,6 @@ function hasValidDomains(domains) {
   return domains.length > 0 && domains.every((domain) => VALID_DOMAIN.test(domain));
 }
 
-let lastCompilerStats = {
-  parsed: 0,
-  parsedExceptions: 0,
-  skippedComments: 0,
-  skippedCosmetic: 0,
-  skippedExceptions: 0,
-  skippedRegex: 0,
-  skippedUnsupported: 0,
-  skippedUnknownModifiers: 0,
-  deduplicated: 0,
-  capped: false,
-};
-
-/**
- * Returns the most recent compiler stats snapshot.
- * @returns {{ parsed: number, skippedComments: number, skippedCosmetic: number, skippedExceptions: number, skippedRegex: number, skippedUnsupported: number, skippedUnknownModifiers: number, deduplicated: number, capped: boolean }}
- */
-export function getCompilerStats() {
-  return { ...lastCompilerStats };
-}
-
 /**
  * Normalizes a raw ABP/uBlock pattern into a DNR-compatible urlFilter.
  * @param {string} pattern
@@ -412,29 +391,15 @@ function buildExceptionRule(pattern, modifiersText) {
  * @returns {Array<{ priority: number, action: { type: 'block' }, condition: { urlFilter: string, resourceTypes: string[], domainType?: string, initiatorDomains?: string[], excludedInitiatorDomains?: string[] } }>}
  */
 export function parseFilterList(text) {
-  const stats = {
-    parsed: 0,
-    parsedExceptions: 0,
-    skippedComments: 0,
-    skippedCosmetic: 0,
-    skippedExceptions: 0,
-    skippedRegex: 0,
-    skippedUnsupported: 0,
-    skippedUnknownModifiers: 0,
-    deduplicated: 0,
-    capped: false,
-  };
   const parsedRules = [];
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.trim();
     if (!line || line.startsWith('!') || line.startsWith('#') || line.startsWith('[')) {
-      stats.skippedComments += 1;
       continue;
     }
 
     if (NON_NETWORK_SEPARATOR.test(line) || HTML_FILTER_SEPARATOR.test(line)) {
-      stats.skippedCosmetic += 1;
       continue;
     }
 
@@ -442,7 +407,6 @@ export function parseFilterList(text) {
     const body = isException ? line.slice(2) : line;
 
     if (/^\/.*\/$/.test(body)) {
-      stats.skippedRegex += 1;
       continue;
     }
 
@@ -454,13 +418,11 @@ export function parseFilterList(text) {
     if (isException) {
       rule = buildExceptionRule(pattern, modifiers);
       if (!rule) {
-        stats.skippedExceptions += 1;
         continue;
       }
     } else {
       const urlFilter = normalizeUrlFilter(pattern);
       if (!urlFilter) {
-        stats.skippedUnsupported += 1;
         continue;
       }
 
@@ -473,7 +435,6 @@ export function parseFilterList(text) {
       if (modifiers) {
         const result = applyModifiers(condition, modifiers);
         if (!result.ok || !result.condition) {
-          stats.skippedUnknownModifiers += 1;
           continue;
         }
         condition = result.condition;
@@ -497,18 +458,12 @@ export function parseFilterList(text) {
       || !hasValidDomains(rule.condition.initiatorDomains)
       || !hasValidDomains(rule.condition.excludedInitiatorDomains)
     ) {
-      stats.skippedUnsupported += 1;
       continue;
     }
 
     parsedRules.push(rule);
-    stats.parsed += 1;
-    if (isException) {
-      stats.parsedExceptions += 1;
-    }
   }
 
-  lastCompilerStats = stats;
   return parsedRules;
 }
 
@@ -519,7 +474,7 @@ export function parseFilterList(text) {
  * @returns {Array<{ id: number, priority: number, action: { type: 'block' }, condition: { urlFilter: string, resourceTypes: string[], domainType?: string, initiatorDomains?: string[], excludedInitiatorDomains?: string[] } }>}
  */
 export function compileRules(parsedRules, startId) {
-  const uniqueRules = new Map();
+  const uniqueRules = new Set();
   const compiledRules = [];
   let nextId = startId;
 
@@ -540,12 +495,10 @@ export function compileRules(parsedRules, startId) {
     });
 
     if (uniqueRules.has(key)) {
-      lastCompilerStats.deduplicated += 1;
       continue;
     }
 
     if (compiledRules.length >= MAX_COMPILED_RULES) {
-      lastCompilerStats.capped = true;
       break;
     }
 
@@ -556,7 +509,7 @@ export function compileRules(parsedRules, startId) {
       condition: { ...rule.condition, resourceTypes: [...rule.condition.resourceTypes] },
     };
 
-    uniqueRules.set(key, true);
+    uniqueRules.add(key);
     compiledRules.push(compiledRule);
     nextId += 1;
   }

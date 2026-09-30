@@ -68,16 +68,7 @@
         googletag.destroySlots = () => true;
       }
 
-      try {
-        Object.defineProperty(root, 'googletag', {
-          configurable: true,
-          enumerable: true,
-          writable: true,
-          value: googletag,
-        });
-      } catch {
-        root.googletag = googletag;
-      }
+      root.googletag = googletag;
 
       const adsbygoogle = Array.isArray(root.adsbygoogle) ? root.adsbygoogle : [];
       Object.defineProperty(adsbygoogle, 'push', {
@@ -87,30 +78,12 @@
           return adsbygoogle.length;
         },
       });
-      try {
-        Object.defineProperty(root, 'adsbygoogle', {
-          configurable: true,
-          enumerable: true,
-          writable: true,
-          value: adsbygoogle,
-        });
-      } catch {
-        root.adsbygoogle = adsbygoogle;
-      }
+      root.adsbygoogle = adsbygoogle;
 
       const googleTagManager = (root.google_tag_manager && typeof root.google_tag_manager === 'object')
         ? root.google_tag_manager
         : {};
-      try {
-        Object.defineProperty(root, 'google_tag_manager', {
-          configurable: true,
-          enumerable: true,
-          writable: true,
-          value: googleTagManager,
-        });
-      } catch {
-        root.google_tag_manager = googleTagManager;
-      }
+      root.google_tag_manager = googleTagManager;
 
       const googlefc = (root.googlefc && typeof root.googlefc === 'object')
         ? root.googlefc
@@ -119,16 +92,7 @@
         ? googlefc.callbackQueue
         : {};
       googlefc.callbackQueue.push = () => 0;
-      try {
-        Object.defineProperty(root, 'googlefc', {
-          configurable: true,
-          enumerable: true,
-          writable: true,
-          value: googlefc,
-        });
-      } catch {
-        root.googlefc = googlefc;
-      }
+      root.googlefc = googlefc;
     } catch {
       // Ignore scriptlet failures.
     }

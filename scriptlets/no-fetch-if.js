@@ -16,32 +16,6 @@
       }
       const blockPattern = /(adserver|pagefair|sourcepoint\.com\/api|amazon-adsystem|doubleclick\.net\/activity|imasdk\.googleapis\.com|\/api\/stats\/ads\?|get_midroll_info|\/ptracking|pagead2\.googlesyndication\.com\/pagead)/i;
 
-      const createEmptyResponse = (requestUrl) => {
-        if (typeof Response === 'function') {
-          return new Response('', {
-            status: 200,
-            statusText: 'OK',
-          });
-        }
-
-        return {
-          ok: true,
-          status: 200,
-          statusText: 'OK',
-          url: requestUrl,
-          headers: typeof Headers === 'function' ? new Headers() : {},
-          async text() {
-            return '';
-          },
-          async json() {
-            return {};
-          },
-          clone() {
-            return this;
-          },
-        };
-      };
-
       const wrappedFetch = function shieldBlockFetch(resource, init) {
         try {
           const requestUrl = typeof resource === 'string'
@@ -49,7 +23,7 @@
             : String(resource?.url ?? resource?.toString?.() ?? '');
 
           if (blockPattern.test(requestUrl)) {
-            return Promise.resolve(createEmptyResponse(requestUrl));
+            return Promise.resolve(new Response('', { status: 200, statusText: 'OK' }));
           }
         } catch {
           // Fall through to original fetch.

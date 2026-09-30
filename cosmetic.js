@@ -185,6 +185,12 @@
       idNames: Object.freeze(['ad', 'ads']),
     }),
   });
+  const X_COSMETICS = Object.freeze([
+    '[data-testid="placementTracking"]',
+    '[data-testid="trend"] [aria-label="Promoted"]',
+    'article:has([data-testid="placementTracking"])',
+    'section[aria-label*="Who to follow"]',
+  ]);
   const DOMAIN_COSMETICS = Object.freeze({
     'youtube.com': Object.freeze([
       /* --- Video player ad elements --- */
@@ -230,7 +236,6 @@
       '#companion-slot',
       '.iv-branding',
       '.ytp-iv-video-content',
-      '.video-ads',
       '#movie_player .ytp-ad-module',
       '.ytd-promoted-sparkles-web-renderer',
       '.ytd-action-companion-ad-renderer',
@@ -244,14 +249,7 @@
       '#panel-pages ytd-banner-promo-renderer',
       'ytd-in-feed-ad-layout-renderer',
       '#contents ytd-ad-slot-renderer',
-      '#masthead-ad',
-      'ytd-ad-slot-renderer',
-      'ytd-promoted-sparkles-web-renderer',
-      'ytd-promoted-video-renderer',
-      'ytd-display-ad-renderer',
-      'ytd-in-feed-ad-layout-renderer',
       '.ytd-promoted-sparkles-text-search-renderer',
-      '#player-ads',
       '.ytp-ad-progress',
       '.ytp-ad-progress-list',
       '.video-ads.ytp-ad-module',
@@ -262,7 +260,6 @@
       'yt-playability-error-supported-renderers',
       'ytd-enforcement-message-view-model',
       '.ytd-enforcement-message-view-model',
-      'yt-mealbar-promo-renderer',
       'ytd-rich-item-renderer:has(ytd-display-ad-renderer)',
       'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"]',
       'ytm-promoted-sparkles-web-renderer',
@@ -296,18 +293,8 @@
       'div[data-pagelet*="FeedUnit"][role="article"]:has([aria-label="Sponsored"])',
       '._5u5j',
     ]),
-    'twitter.com': Object.freeze([
-      '[data-testid="placementTracking"]',
-      '[data-testid="trend"] [aria-label="Promoted"]',
-      'article:has([data-testid="placementTracking"])',
-      'section[aria-label*="Who to follow"]',
-    ]),
-    'x.com': Object.freeze([
-      '[data-testid="placementTracking"]',
-      '[data-testid="trend"] [aria-label="Promoted"]',
-      'article:has([data-testid="placementTracking"])',
-      'section[aria-label*="Who to follow"]',
-    ]),
+    'twitter.com': X_COSMETICS,
+    'x.com': X_COSMETICS,
     'reddit.com': Object.freeze([
       'shreddit-ad-post',
       '[data-testid="post-container"]:has([data-click-id="ad"])',
@@ -494,7 +481,6 @@
     if (!(style instanceof HTMLStyleElement)) {
       style = document.createElement('style');
       style.id = styleId;
-      style.type = 'text/css';
       style.textContent = cssText;
       parent.appendChild(style);
       return style;
@@ -797,11 +783,7 @@
       return;
     }
 
-    const scheduler = typeof window.requestAnimationFrame === 'function'
-      ? window.requestAnimationFrame.bind(window)
-      : (callback) => window.setTimeout(callback, 16);
-
-    mutationFrameId = scheduler(() => {
+    mutationFrameId = window.requestAnimationFrame(() => {
       mutationFrameId = 0;
       flushPendingMutations();
     });
@@ -844,45 +826,6 @@
   }
 
   /**
-   * Dispatches the internal navigation event used for SPA refreshes.
-   * @param {string} reason
-   * @returns {void}
-   */
-  function dispatchNavigationEvent(reason) {
-    window.dispatchEvent(new CustomEvent('shieldblock-navigate', {
-      detail: {
-        reason,
-        url: location.href,
-      },
-    }));
-  }
-
-  /**
-   * Wraps history methods to emit a navigation event after SPA transitions.
-   * @param {'pushState' | 'replaceState'} methodName
-   * @returns {void}
-   */
-  function wrapHistoryMethod(methodName) {
-    const original = history[methodName];
-    if (typeof original !== 'function' || original.__shieldblockWrapped === true) {
-      return;
-    }
-
-    const wrapped = function shieldblockWrappedHistory(...args) {
-      const result = Reflect.apply(original, this, args);
-      dispatchNavigationEvent(methodName);
-      return result;
-    };
-
-    wrapped.__shieldblockWrapped = true;
-    try {
-      history[methodName] = wrapped;
-    } catch {
-      // Some pages harden history methods; popstate and native events remain as fallback.
-    }
-  }
-
-  /**
    * Reapplies cosmetic rules after SPA navigation.
    * @returns {void}
    */
@@ -893,14 +836,11 @@
   }
 
   /**
-   * Installs SPA navigation hooks for history and YouTube custom events.
+   * Reruns cosmetics on SPA navigation. pushState transitions need no hook:
+   * the mutation observer sees the content they swap in.
    * @returns {void}
    */
   function installNavigationHooks() {
-    wrapHistoryMethod('pushState');
-    wrapHistoryMethod('replaceState');
-
-    window.addEventListener('shieldblock-navigate', rerunAllCosmetics, { passive: true });
     window.addEventListener('popstate', rerunAllCosmetics, { passive: true });
     window.addEventListener('yt-navigate-finish', rerunAllCosmetics, { passive: true });
   }

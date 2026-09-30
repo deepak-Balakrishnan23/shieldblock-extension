@@ -2,7 +2,6 @@
 
 /** Estimated average bytes saved per blocked ad/tracker/threat request. */
 const AVG_BYTES_PER_BLOCK = 55 * 1024;
-const POLL_INTERVAL_MS = 2000;
 
 const elements = {
   statusText: document.getElementById('status-text'),
@@ -27,7 +26,6 @@ const elements = {
   openOptions: document.getElementById('open-options'),
 };
 
-let refreshTimer = 0;
 let currentStats = {
   enabled: true,
   currentDomain: '',
@@ -149,11 +147,10 @@ function renderStats(stats) {
     if (!currentDomain) {
       elements.pageSub.textContent = 'Open a website to manage protection';
     } else {
-      elements.pageSub.innerHTML = allowlisted
-        ? `Protection paused on <strong></strong>`
-        : `Blocking ads and trackers on <strong></strong>`;
-      const strong = elements.pageSub.querySelector('strong');
-      if (strong) strong.textContent = currentDomain;
+      elements.pageSub.replaceChildren(
+        allowlisted ? 'Protection paused on ' : 'Blocking ads and trackers on ',
+        elements.currentDomain,
+      );
     }
   }
 }
@@ -224,9 +221,10 @@ elements.refreshLists?.addEventListener('click', () => { void handleRefreshLists
 elements.allowlistButton?.addEventListener('click', () => { void handleAllowlistToggle(); });
 elements.openOptions?.addEventListener('click', () => { void chrome.runtime.openOptionsPage(); });
 
-window.addEventListener('unload', () => {
-  if (refreshTimer) window.clearInterval(refreshTimer);
+// Counters, the allowlist, and the toggle all live in storage, so a change
+// there is the signal to re-render.
+chrome.storage.onChanged.addListener((_changes, area) => {
+  if (area === 'local') void loadStats();
 });
 
 void loadStats();
-refreshTimer = window.setInterval(() => { void loadStats(); }, POLL_INTERVAL_MS);

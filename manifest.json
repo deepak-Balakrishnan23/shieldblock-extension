@@ -35,7 +35,15 @@
       ],
       "js": [
         "cosmetic.js",
-        "content.js",
+        "content.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "*://*.youtube.com/*"
+      ],
+      "js": [
         "sponsorblock.js"
       ],
       "run_at": "document_start"

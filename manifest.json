@@ -233,11 +233,6 @@
         "id": "gen-ext-20",
         "enabled": false,
         "path": "rules/generated/ext-20.json"
-      },
-      {
-        "id": "gen-ext-21",
-        "enabled": false,
-        "path": "rules/generated/ext-21.json"
       }
     ]
   },
